@@ -1,7 +1,8 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 
-static EXIT_SHELL_KEYWORD: &'static str = "exit";
+static KEYWORD_EXIT_SHELL: &'static str = "exit";
+static KEYWORD_ECHO: &'static str = "echo";
 
 fn repl() -> Result<(), io::Error> {
     loop {
@@ -11,11 +12,34 @@ fn repl() -> Result<(), io::Error> {
         io::stdin().read_line(&mut buf)?;
         let buf = buf.trim();
 
-        if buf == EXIT_SHELL_KEYWORD {
-            std::process::exit(0);
-        }
+        let _ = eval(buf);
+    }
+}
 
-        println!("{}: command not found", buf);
+pub struct EvalError;
+
+fn eval(input: &str) -> Result<(), EvalError> {
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(());
+    }
+
+    let (keyword, rest) = match input.find(|ch: char| ch.is_whitespace()) {
+        Some(index) => {
+            let (k, r) = input.split_at(index);
+            (k, r.trim())
+        }
+        None => (input, ""),
+    };
+
+    if keyword == KEYWORD_EXIT_SHELL {
+        std::process::exit(0);
+    } else if keyword == KEYWORD_ECHO {
+        println!("{rest}");
+        return Ok(());
+    } else {
+        println!("{}: command not found", keyword);
+        return Ok(());
     }
 }
 
