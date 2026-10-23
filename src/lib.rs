@@ -10,7 +10,6 @@ use std::{
 
 use is_executable::is_executable;
 
-
 static KEYWORD_EXIT_SHELL: &str = "exit";
 static KEYWORD_ECHO: &str = "echo";
 static KEYWORD_TYPE: &str = "type";
@@ -142,8 +141,7 @@ fn exec_program(program: &str, args: &str) {
         .output()
         .expect("Process should execute successfully");
 
-    // let proc_stdout = output.stdout;
-    println!("status: {}", output.status);
+    // println!("status: {}", output.status);
     let _ = io::stdout().write_all(&output.stdout);
 }
 
