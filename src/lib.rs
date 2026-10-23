@@ -3,6 +3,7 @@ use std::io::{self, Write};
 use std::{
     collections::HashMap,
     env::{self},
+    ffi::{OsStr, OsString},
     fs::{self},
     path::{Path, PathBuf},
     process::Command,
@@ -105,34 +106,34 @@ fn eval(
         }
         return Ok(());
     } else {
-        if cache.contains_key(cmd) {
-            let v = cache.get(cmd).unwrap();
-            match v {
-                CacheEntry::Val(v) => {
-                    println!("{cmd} is {v}");
-                }
-                CacheEntry::NoVal => {
-                    println!("{cmd}: not found");
-                }
+        match cache.get(cmd) {
+            Some(CacheEntry::Val(s)) => {
+                let prg = Path::new(s).file_name().unwrap();
+                exec_program(prg, args);
+                return Ok(());
             }
-            return Ok(());
-        } else if let Some(pb) = find_exec_file(cmd, paths) {
-            // see if an executable with matching name exists
+            Some(CacheEntry::NoVal) => {
+                println!("{cmd}: not found");
+                return Ok(());
+            }
+            _ => (),
+        }
+
+        if let Some(pbuf) = find_exec_file(cmd, paths) {
             cache.insert(
                 cmd.to_string(),
-                CacheEntry::Val(pb.to_str().unwrap().to_string()),
+                CacheEntry::Val(pbuf.to_str().unwrap().to_string()),
             );
-            let program = pb.to_str().unwrap();
-            exec_program(program, args);
+            exec_program(pbuf.file_name().unwrap(), args);
+            return Ok(());
         }
         cache.insert(cmd.to_string(), CacheEntry::NoVal);
         println!("{cmd}: not found");
     }
-
     Ok(())
 }
 
-fn exec_program(program: &str, args: &str) {
+fn exec_program<T: AsRef<OsStr>>(program: T, args: &str) {
     let args: Vec<&str> = args.split_whitespace().collect();
     // spawn a new process that inherits our shell's environment
     // and current working directory
