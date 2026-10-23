@@ -59,7 +59,7 @@ fn eval(input: &str) -> Result<(), EvalError> {
         if valid {
             println!("{cmd} is a shell builtin");
         } else {
-            println!("invalid_command: not found");
+            println!("{cmd}: not found");
         }
         Ok(())
     } else {
