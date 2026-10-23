@@ -138,7 +138,7 @@ fn load_paths() -> Vec<PathBuf> {
     match env::var_os("PATH") {
         Some(paths) => {
             for p in env::split_paths(&paths) {
-                dbg!(&p);
+                // dbg!(&p);
                 if p.is_dir() {
                     valid_dirs.push(p);
                 }
