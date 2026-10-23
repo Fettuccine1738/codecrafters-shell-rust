@@ -3,6 +3,14 @@ use std::io::{self, Write};
 
 static KEYWORD_EXIT_SHELL: &'static str = "exit";
 static KEYWORD_ECHO: &'static str = "echo";
+static KEYWORD_TYPE: &'static str = "type";
+static KEYWORD_BUILTIN: &'static str = "builtin";
+static LIST_VALID_CMDS: [&'static str; 4] = [
+    KEYWORD_BUILTIN,
+    KEYWORD_ECHO,
+    KEYWORD_EXIT_SHELL,
+    KEYWORD_TYPE,
+];
 
 fn repl() -> Result<(), io::Error> {
     loop {
@@ -37,6 +45,23 @@ fn eval(input: &str) -> Result<(), EvalError> {
     } else if keyword == KEYWORD_ECHO {
         println!("{rest}");
         return Ok(());
+    } else if keyword == KEYWORD_TYPE {
+        let cmd = rest;
+        let mut valid = false;
+
+        for s in LIST_VALID_CMDS {
+            if s == cmd {
+                valid = true;
+                break;
+            }
+        }
+
+        if valid {
+            println!("{cmd} is a shell builtin");
+        } else {
+            println!("invalid_command: not found");
+        }
+        Ok(())
     } else {
         println!("{}: command not found", keyword);
         return Ok(());
