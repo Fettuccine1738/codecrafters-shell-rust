@@ -1,8 +1,19 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 
-fn main() {
-    // TODO: Uncomment the code below to pass the first stage
+fn repl() -> Result<(), io::Error>{
     print!("$ ");
     io::stdout().flush().unwrap();
+    let mut buf = String::new();
+    io::stdin().read_line(&mut buf)?;
+    let buf = buf.trim();
+    println!("{}: command not found", buf);
+    Ok(())
+}
+
+fn main() {
+    match repl() {
+        Ok(()) => (), 
+        Err(_err) => todo!()
+    }
 }
