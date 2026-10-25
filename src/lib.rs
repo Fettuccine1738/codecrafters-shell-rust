@@ -23,7 +23,6 @@ static OPERATOR_REDIRECT: char = '>';
 static _OPERATOR_REDIRECT_FD: &str = "1>";
 static OPERATOR_APPEND_FILE: &str = ">>";
 
-
 static LIST_VALID_CMDS: [&str; 4] = [
     KEYWORD_BUILTIN,
     KEYWORD_ECHO,
@@ -237,6 +236,8 @@ fn split_redirect(args: &str) -> OuputOpts<'_> {
 }
 
 fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow::Result<()> {
+    // ascii '\n' = 10u8
+    let ends_new_line = bytes[bytes.len() - 1] == 10u8;
     match path {
         Some(path) => {
             // this should create a new file if it does not exist
@@ -251,12 +252,13 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow
             let mut file = oo.create(true).open(path)?;
 
             file.write_all(&bytes)?;
+            if !ends_new_line {
+                file.write(&[10u8])?;
+            }
         }
-        // avoids wasted space
         None => {
+            // avoids printing to the std out when we don't need to
             if !bytes.is_empty() {
-                // ascii '\n' = 10u8
-                let ends_new_line = bytes[bytes.len() - 1] == 10u8;
                 let as_text = unsafe { String::from_utf8_unchecked(bytes) };
                 if ends_new_line {
                     print!("{}", as_text);
