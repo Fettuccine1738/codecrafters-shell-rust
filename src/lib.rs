@@ -251,7 +251,6 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow
             let mut file = oo.create(true).open(path)?;
 
             file.write_all(&bytes)?;
-            file.write_all(&[10u8])?; // write newline
         }
         // avoids wasted space
         None => {
