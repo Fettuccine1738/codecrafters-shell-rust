@@ -75,16 +75,21 @@ fn eval(
         None => (input, ""),
     };
 
-    let (args, redirect) = split_redirect(args);
+    let mut redirect_err = false;
+    let (args, redirect) = split_redirect(args, &mut redirect_err);
 
     if cmd == KEYWORD_EXIT_SHELL {
         std::process::exit(0);
     } else if cmd == KEYWORD_ECHO {
         let output = args.bytes().collect::<Vec<u8>>();
-        write_output(redirect, output)?
+        // print to terminal , redirect is set but we have no fallible impls
+        // this only creates the destination file to be redirected to.
+        write_output(if redirect_err { redirect } else { None }, vec![])?;
+        // our own echo has no implementation and therefore cannot fail
+        write_output(if !redirect_err { redirect } else { None }, output)?
     } else if cmd == KEYWORD_TYPE {
         let output = type_command(args, paths, cache);
-        write_output(redirect, output)?
+        write_output(if redirect_err { None } else { redirect }, output)?
     } else {
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
@@ -118,13 +123,20 @@ fn eval(
             }
         };
 
-        // if an error occured we force printing out to output
-        // because non-shell only writes non-error outputs to files.
-        if !err_bytes.is_empty() {
+        // if fd 2 is set we sent error to the file
+        if redirect_err {
+            write_output(redirect, err_bytes)?
+        } else {
+            // if an error occured we force printing out to output
+            // because non-shell only writes non-error outputs to files when
+            // `2>` std err isn't set.
             write_output(None, err_bytes)?
         }
+
         if !out_bytes.is_empty() {
-            write_output(redirect, out_bytes)?
+            // write to file only when `1>` is used, if `2>` we print
+            // out .
+            write_output(if redirect_err { None } else { redirect }, out_bytes)?
         }
     }
     Ok(())
@@ -134,7 +146,10 @@ fn eval(
 // e.g `echo hello world > foo.txt`; split_redirect(`hello .. foo.txt`)
 // and returns the original string if > or 1> is not present
 // or (before `(1)>`, after (`>`) )
-fn split_redirect(args: &str) -> (&str, Option<&str>) {
+fn split_redirect<'arg, 'err>(
+    args: &'arg str,
+    redir_err: &'err mut bool,
+) -> (&'arg str, Option<&'arg str>) {
     match args.find(OPERATOR_REDIRECT) {
         Some(pos) => {
             let (content, path) = args.split_at(pos);
@@ -143,6 +158,14 @@ fn split_redirect(args: &str) -> (&str, Option<&str>) {
             } else {
                 content
             };
+
+            let content = if let Some(stripped) = content.strip_suffix("2") {
+                *redir_err = true;
+                stripped
+            } else {
+                content
+            };
+
             (content.trim(), Some(path[1..].trim()))
         }
         None => (args, None),
@@ -158,6 +181,7 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>) -> anyhow::Result<()> {
         // avoids wasted space
         None => {
             if !bytes.is_empty() {
+                // ascii '\n' = 10u8
                 let ends_new_line = bytes[bytes.len() - 1] == 10u8;
                 let as_text = unsafe { String::from_utf8_unchecked(bytes) };
                 if ends_new_line {
