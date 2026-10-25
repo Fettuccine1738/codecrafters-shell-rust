@@ -163,7 +163,7 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>) -> anyhow::Result<()> {
         // avoids wasted space
         None => if !bytes.is_empty() {
             let as_text = unsafe { String::from_utf8_unchecked(bytes) };
-            println!("{}", as_text);
+            print!("{}", as_text);
         }
     }
     Ok(())
