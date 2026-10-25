@@ -148,7 +148,7 @@ fn split_redirect(args: &str) -> (&str, Option<&str>) {
             } else {
                 content
             };
-            (content, Some(path[1..].trim()))
+            (content.trim(), Some(path[1..].trim()))
         }
         None => (args, None),
     }
