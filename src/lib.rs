@@ -7,6 +7,7 @@ use std::{
     fs::{self, File},
     path::{Path, PathBuf},
     process::Command,
+    vec,
 };
 
 use is_executable::is_executable;
@@ -88,22 +89,16 @@ fn eval(
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
         // that can be written to and will be cleared after every repl call.
-        let mut err_occured = false;
-        let bytes: Vec<u8> = match cache.get(cmd) {
+        let (out_bytes, err_bytes) = match cache.get(cmd) {
             Some(CacheEntry::Val(s)) => {
                 // this program has been called before e.g /usr/bin/ls
                 let prg = Path::new(s).file_name().unwrap();
                 let (stdout, stderr) = exec_program(prg, args)?;
-                if !stderr.is_empty() {
-                    err_occured = true;
-                    stderr
-                } else {
-                    stdout
-                }
+                (stdout, stderr)
             }
             Some(CacheEntry::NoVal) => {
                 // again called before but not a valid program e.g /usr/bin/non-exist
-                format!("{cmd}: not found").into_bytes()
+                (format!("{cmd}: not found").into_bytes(), vec![])
             }
             _ => {
                 // first time call
@@ -114,23 +109,23 @@ fn eval(
                     );
                     let prg = pbuf.file_name().unwrap();
                     let (stdout, stderr) = exec_program(prg, args)?;
-                    if !stderr.is_empty() {
-                        err_occured = true;
-                        stderr
-                    } else {
-                        stdout
-                    }
+                    (stdout, stderr)
                 } else {
                     cache.insert(cmd.to_string(), CacheEntry::NoVal);
-                    err_occured = true; // avoids redirecting to file if an error orccured
-                    format!("{cmd}: not found").into_bytes()
+                    // we are sending this out as error so it gets printed to eprintln
+                    (vec![], format!("{cmd}: not found").into_bytes())
                 }
             }
         };
 
-        // if an error occured we force printing out to output 
+        // if an error occured we force printing out to output
         // because non-shell only writes non-error outputs to files.
-        write_output(if err_occured { None } else { redirect }, bytes)?
+        if !err_bytes.is_empty() {
+            write_output(None, err_bytes)?
+        }
+        if !out_bytes.is_empty() {
+            write_output(redirect, out_bytes)?
+        }
     }
     Ok(())
 }
@@ -161,13 +156,15 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>) -> anyhow::Result<()> {
             file.write_all(&bytes)?;
         }
         // avoids wasted space
-        None => if !bytes.is_empty() {
-            let ends_new_line = bytes[bytes.len() - 1] == 10u8;
-            let as_text = unsafe { String::from_utf8_unchecked(bytes) };
-            if ends_new_line {
-                print!("{}", as_text);
-            } else {
-                println!("{}", as_text);
+        None => {
+            if !bytes.is_empty() {
+                let ends_new_line = bytes[bytes.len() - 1] == 10u8;
+                let as_text = unsafe { String::from_utf8_unchecked(bytes) };
+                if ends_new_line {
+                    print!("{}", as_text);
+                } else {
+                    println!("{}", as_text);
+                }
             }
         }
     }
