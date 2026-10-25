@@ -253,7 +253,7 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow
 
             file.write_all(&bytes)?;
             if !ends_new_line {
-                file.write(&[10u8])?;
+                file.write_all(&[10u8])?;
             }
         }
         None => {
