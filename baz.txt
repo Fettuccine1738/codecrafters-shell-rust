@@ -1,0 +1,1 @@
+foo >> baz.txtbar >> baz.txt

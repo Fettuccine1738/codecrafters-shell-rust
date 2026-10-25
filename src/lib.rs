@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     env::{self},
     ffi::OsStr,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     path::{Path, PathBuf},
     process::Command,
     vec,
@@ -57,6 +57,16 @@ pub fn repl() -> anyhow::Result<()> {
     }
 }
 
+#[derive(Default, Debug)]
+struct OuputOpts<'src> {
+    pub(crate) args: &'src str,
+    pub(crate) redirect: Option<&'src str>,
+    // true = redirect error to the file path in redirect
+    pub(crate) redirect_err: bool,
+    // append = false, means we create a new file
+    pub(crate) append: bool,
+}
+
 fn eval(
     input: &str,
     paths: &[PathBuf],
@@ -75,21 +85,48 @@ fn eval(
         None => (input, ""),
     };
 
-    let mut redirect_err = false;
-    let (args, redirect) = split_redirect(args, &mut redirect_err);
+    // TODO: refactor functions to accept the struct directly
+    let output_opts: OuputOpts<'_> = split_redirect(args);
+    let redirect_err = output_opts.redirect_err;
+    // dbg!(&output_opts);
 
     if cmd == KEYWORD_EXIT_SHELL {
         std::process::exit(0);
     } else if cmd == KEYWORD_ECHO {
-        let output = args.bytes().collect::<Vec<u8>>();
-        // print to terminal , redirect is set but we have no fallible impls
-        // this only creates the destination file to be redirected to.
-        write_output(if redirect_err { redirect } else { None }, vec![])?;
-        // our own echo has no implementation and therefore cannot fail
-        write_output(if !redirect_err { redirect } else { None }, output)?
+        let output = output_opts.args.bytes().collect::<Vec<u8>>();
+        // prints to terminal when redirect is set but we have no fallible impls
+        // so this only creates the destination file to be redirected to and writes.
+        // nothing to it.
+        write_output(
+            if redirect_err {
+                output_opts.redirect
+            } else {
+                None
+            },
+            vec![],
+            output_opts.append,
+        )?;
+        // if redirect_err is not set write to the shell
+        write_output(
+            if !redirect_err {
+                output_opts.redirect
+            } else {
+                None
+            },
+            output,
+            output_opts.append,
+        )?
     } else if cmd == KEYWORD_TYPE {
         let output = type_command(args, paths, cache);
-        write_output(if redirect_err { None } else { redirect }, output)?
+        write_output(
+            if redirect_err {
+                None
+            } else {
+                output_opts.redirect
+            },
+            output,
+            output_opts.append,
+        )?
     } else {
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
@@ -125,18 +162,26 @@ fn eval(
 
         // if fd 2 is set we sent error to the file
         if redirect_err {
-            write_output(redirect, err_bytes)?
+            write_output(output_opts.redirect, err_bytes, output_opts.append)?
         } else {
             // if an error occured we force printing out to output
             // because non-shell only writes non-error outputs to files when
             // `2>` std err isn't set.
-            write_output(None, err_bytes)?
+            write_output(None, err_bytes, output_opts.append)?
         }
 
         if !out_bytes.is_empty() {
             // write to file only when `1>` is used, if `2>` we print
             // out .
-            write_output(if redirect_err { None } else { redirect }, out_bytes)?
+            write_output(
+                if redirect_err {
+                    None
+                } else {
+                    output_opts.redirect
+                },
+                out_bytes,
+                output_opts.append,
+            )?
         }
     }
     Ok(())
@@ -146,10 +191,7 @@ fn eval(
 // e.g `echo hello world > foo.txt`; split_redirect(`hello .. foo.txt`)
 // and returns the original string if > or 1> is not present
 // or (before `(1)>`, after (`>`) )
-fn split_redirect<'arg, 'err>(
-    args: &'arg str,
-    redir_err: &'err mut bool,
-) -> (&'arg str, Option<&'arg str>) {
+fn split_redirect(args: &str) -> OuputOpts<'_> {
     match args.find(OPERATOR_REDIRECT) {
         Some(pos) => {
             let (content, path) = args.split_at(pos);
@@ -159,24 +201,57 @@ fn split_redirect<'arg, 'err>(
                 content
             };
 
+            let mut redirect_err = false;
+            let mut append = false;
+
             let content = if let Some(stripped) = content.strip_suffix("2") {
-                *redir_err = true;
+                redirect_err = true;
                 stripped
             } else {
                 content
             };
 
-            (content.trim(), Some(path[1..].trim()))
+            // trims off `>>` or `>`
+            let path = if path.starts_with(">>") {
+                append = true;
+                path[2..].trim()
+            } else {
+                path[1..].trim()
+            };
+
+            OuputOpts {
+                args: content.trim(),
+                redirect: Some(path),
+                redirect_err,
+                append,
+            }
         }
-        None => (args, None),
+        // returns args, redirect = None, redir_err = false , append = false
+        None => OuputOpts {
+            args,
+            ..Default::default()
+        },
     }
 }
 
-fn write_output(path: Option<&str>, bytes: Vec<u8>) -> anyhow::Result<()> {
+fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow::Result<()> {
     match path {
         Some(path) => {
-            let mut file = File::create(path)?;
+            // this should create a new file if it does not exist 
+            let mut oo = OpenOptions::new();
+            if append_file {
+                oo.append(true);
+            } else {
+                oo.truncate(true);
+                oo.write(true);
+            }
+
+            let mut file = oo
+                .create(true)
+                .open(path)?;
+
             file.write_all(&bytes)?;
+            file.write_all(&[10u8])?;// write newline
         }
         // avoids wasted space
         None => {
