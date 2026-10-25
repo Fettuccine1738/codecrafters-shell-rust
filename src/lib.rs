@@ -173,7 +173,7 @@ fn eval(
             }
             Some(CacheEntry::NoVal) => {
                 // again called before but not a valid program e.g /usr/bin/non-exist
-                (format!("{cmd}: not found").into_bytes(), vec![])
+                (format!("{cmd}: not found\n").into_bytes(), vec![])
             }
             _ => {
                 // first time call
@@ -188,7 +188,7 @@ fn eval(
                 } else {
                     cache.insert(cmd.to_string(), CacheEntry::NoVal);
                     // we are sending this out as error so it gets printed to eprintln
-                    (vec![], format!("{cmd}: not found").into_bytes())
+                    (vec![], format!("{cmd}: not found\n").into_bytes())
                 }
             }
         };
