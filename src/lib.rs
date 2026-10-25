@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     env::{self},
     ffi::OsStr,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     path::{Path, PathBuf},
     process::Command,
     vec,
@@ -21,6 +21,8 @@ static OPERATOR_REDIRECT: char = '>';
 // In Unix std-output  is identified by `1`.
 // Usage: `echo hello 1> file.txt`
 static _OPERATOR_REDIRECT_FD: &str = "1>";
+static OPERATOR_APPEND_FILE: &str = ">>";
+
 
 static LIST_VALID_CMDS: [&str; 4] = [
     KEYWORD_BUILTIN,
@@ -117,7 +119,7 @@ fn eval(
             output_opts.append,
         )?
     } else if cmd == KEYWORD_TYPE {
-        let output = type_command(args, paths, cache);
+        let output = type_command(output_opts.args, paths, cache);
         write_output(
             if redirect_err {
                 None
@@ -135,7 +137,7 @@ fn eval(
             Some(CacheEntry::Val(s)) => {
                 // this program has been called before e.g /usr/bin/ls
                 let prg = Path::new(s).file_name().unwrap();
-                let (stdout, stderr) = exec_program(prg, args)?;
+                let (stdout, stderr) = exec_program(prg, output_opts.args)?;
                 (stdout, stderr)
             }
             Some(CacheEntry::NoVal) => {
@@ -150,7 +152,7 @@ fn eval(
                         CacheEntry::Val(pbuf.to_str().unwrap().to_string()),
                     );
                     let prg = pbuf.file_name().unwrap();
-                    let (stdout, stderr) = exec_program(prg, args)?;
+                    let (stdout, stderr) = exec_program(prg, output_opts.args)?;
                     (stdout, stderr)
                 } else {
                     cache.insert(cmd.to_string(), CacheEntry::NoVal);
@@ -212,9 +214,9 @@ fn split_redirect(args: &str) -> OuputOpts<'_> {
             };
 
             // trims off `>>` or `>`
-            let path = if path.starts_with(">>") {
+            let path = if let Some(stripped) = path.strip_prefix(OPERATOR_APPEND_FILE) {
                 append = true;
-                path[2..].trim()
+                stripped.trim()
             } else {
                 path[1..].trim()
             };
@@ -237,7 +239,7 @@ fn split_redirect(args: &str) -> OuputOpts<'_> {
 fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow::Result<()> {
     match path {
         Some(path) => {
-            // this should create a new file if it does not exist 
+            // this should create a new file if it does not exist
             let mut oo = OpenOptions::new();
             if append_file {
                 oo.append(true);
@@ -246,12 +248,10 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow
                 oo.write(true);
             }
 
-            let mut file = oo
-                .create(true)
-                .open(path)?;
+            let mut file = oo.create(true).open(path)?;
 
             file.write_all(&bytes)?;
-            file.write_all(&[10u8])?;// write newline
+            file.write_all(&[10u8])?; // write newline
         }
         // avoids wasted space
         None => {
