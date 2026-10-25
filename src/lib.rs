@@ -251,11 +251,10 @@ fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow
             let mut file = oo.create(true).open(path)?;
 
             file.write_all(&bytes)?;
-
-            let ends_new_line = !bytes.is_empty() && bytes[bytes.len() - 1] == 10u8;
-            if !ends_new_line {
-                file.write_all(&[10u8])?;
-            }
+            // let ends_new_line = !bytes.is_empty() && bytes[bytes.len() - 1] == 10u8;
+            // if !ends_new_line {
+            //     file.write_all(&[10u8])?;
+            // }
         }
         None => {
             // avoids printing to the std out when we don't need to
