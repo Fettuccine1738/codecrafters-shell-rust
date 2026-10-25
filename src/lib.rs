@@ -94,7 +94,7 @@ fn eval(
     if cmd == KEYWORD_EXIT_SHELL {
         std::process::exit(0);
     } else if cmd == KEYWORD_ECHO {
-        let output = output_opts.args.bytes().collect::<Vec<u8>>();
+        let mut output = output_opts.args.bytes().collect::<Vec<u8>>();
         // prints to terminal when redirect is set but we have no fallible impls
         // so this only creates the destination file to be redirected to and writes.
         // nothing to it.
@@ -107,6 +107,9 @@ fn eval(
             vec![],
             output_opts.append,
         )?;
+        if !output.is_empty() && output[output.len() - 1] != 10 {
+            output.push(10);
+        }
         // if redirect_err is not set write to the shell
         write_output(
             if !redirect_err {
