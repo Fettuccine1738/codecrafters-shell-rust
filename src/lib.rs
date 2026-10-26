@@ -10,7 +10,12 @@ use std::{
     vec,
 };
 
+mod completion;
+
 use is_executable::is_executable;
+use rustyline::{Editor, history::DefaultHistory};
+
+use crate::completion::ShellHelper;
 
 static KEYWORD_EXIT_SHELL: &str = "exit";
 static KEYWORD_ECHO: &str = "echo";
@@ -23,7 +28,7 @@ static OPERATOR_REDIRECT: char = '>';
 static _OPERATOR_REDIRECT_FD: &str = "1>";
 static OPERATOR_APPEND_FILE: &str = ">>";
 
-static LIST_VALID_CMDS: [&str; 4] = [
+static LIST_BUILTINS: [&str; 4] = [
     KEYWORD_BUILTIN,
     KEYWORD_ECHO,
     KEYWORD_EXIT_SHELL,
@@ -47,26 +52,15 @@ pub fn repl() -> anyhow::Result<()> {
     // /usr/bin/ls
     // `ls -a` just needs to hit the cache and no second lookup.
     let mut cache: HashMap<String, CacheEntry> = HashMap::new();
-    loop {
-        print!("$ ");
-        io::stdout().flush().unwrap();
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        let buf = buf.trim();
+    let mut editor: Editor<ShellHelper, DefaultHistory> = Editor::new()?;
+    editor.set_helper(Some(ShellHelper));
+    // editor.set_cursor_visibility(true)?;
 
-        let _ = eval(buf, &paths, &mut cache);
+    loop {
+        let input = editor.readline("$ ")?;
+        let _ = eval(&input, &paths, &mut cache);
     }
 }
-
-// #[derive(Default, Debug)]
-// struct OuputOpts<'src> {
-//     pub(crate) args: &'src str,
-//     pub(crate) redirect: Option<&'src str>,
-//     // true = redirect error to the file path in redirect
-//     pub(crate) redirect_err: bool,
-//     // append = false, means we create a new file
-//     pub(crate) append: bool,
-// }
 
 /// This track destination state for writing / redirecting output
 #[derive(Clone, Copy)]
@@ -98,7 +92,6 @@ fn eval(
         None => (input, ""),
     };
 
-    // TODO: refactor functions to accept the struct directly
     let (args, target) = split_redirect(args);
     // this swaps the target if the File variant whose redir_err is set is matched
     let (out_target, err_target) = match target {
@@ -136,26 +129,6 @@ fn eval(
         // nothing to it.
         write_output(err_target, vec![])?;
         write_output(out_target, output)?
-        // write_output(
-        //     if redirect_err {
-        //         output_opts.redirect
-        //     } else {
-        //         None
-        //     },
-        //     vec![],
-        //     output_opts.append,
-        // )?;
-
-        // // if redirect_err is not set write to the shell
-        // write_output(
-        //     if !redirect_err {
-        //         output_opts.redirect
-        //     } else {
-        //         None
-        //     },
-        //     output,
-        //     output_opts.append,
-        // )?
     } else if cmd == KEYWORD_TYPE {
         let output = type_command(args, paths, cache);
         write_output(err_target, vec![])?;
@@ -195,29 +168,6 @@ fn eval(
 
         write_output(err_target, err_bytes)?;
         write_output(out_target, out_bytes)?
-        // // if fd 2 is set we sent error to the file
-        // if redirect_err {
-        //     write_output(output_opts.redirect, err_bytes, output_opts.append)?
-        // } else {
-        //     // if an error occured we force printing out to output
-        //     // because non-shell only writes non-error outputs to files when
-        //     // `2>` std err isn't set.
-        //     write_output(None, err_bytes, output_opts.append)?
-        // }
-
-        // if !out_bytes.is_empty() {
-        //     // write to file only when `1>` is used, if `2>` we print
-        //     // out .
-        //     write_output(
-        //         if redirect_err {
-        //             None
-        //         } else {
-        //             output_opts.redirect
-        //         },
-        //         out_bytes,
-        //         output_opts.append,
-        //     )?
-        // }
     }
     Ok(())
 }
@@ -306,43 +256,6 @@ fn write_output(target: OutputTarget<'_>, bytes: Vec<u8>) -> anyhow::Result<()> 
     Ok(())
 }
 
-// fn write_output(path: Option<&str>, bytes: Vec<u8>, append_file: bool) -> anyhow::Result<()> {
-//     // ascii '\n' = 10u8
-//     match path {
-//         Some(path) => {
-//             // this should create a new file if it does not exist
-//             let mut oo = OpenOptions::new();
-//             if append_file {
-//                 oo.append(true);
-//             } else {
-//                 oo.truncate(true);
-//                 oo.write(true);
-//             }
-
-//             let mut file = oo.create(true).open(path)?;
-
-//             file.write_all(&bytes)?;
-//             // let ends_new_line = !bytes.is_empty() && bytes[bytes.len() - 1] == 10u8;
-//             // if !ends_new_line {
-//             //     file.write_all(&[10u8])?;
-//             // }
-//         }
-//         None => {
-//             // avoids printing to the std out when we don't need to
-//             if !bytes.is_empty() {
-//                 let ends_new_line = bytes[bytes.len() - 1] == 10u8;
-//                 let as_text = unsafe { String::from_utf8_unchecked(bytes) };
-//                 if ends_new_line {
-//                     print!("{}", as_text);
-//                 } else {
-//                     println!("{}", as_text);
-//                 }
-//             }
-//         }
-//     }
-//     Ok(())
-// }
-
 fn type_command(cmd: &str, paths: &[PathBuf], cache: &mut HashMap<String, CacheEntry>) -> Vec<u8> {
     if find_in_cmds(cmd) {
         return format!("{cmd} is a shell builtin\n").into_bytes();
@@ -380,7 +293,7 @@ fn exec_program<T: AsRef<OsStr>>(program: T, args: &str) -> anyhow::Result<(Vec<
 }
 
 fn find_in_cmds(to_find: &str) -> bool {
-    for s in LIST_VALID_CMDS {
+    for s in LIST_BUILTINS {
         if s == to_find {
             return true;
         }
