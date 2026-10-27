@@ -1,5 +1,7 @@
 // use std::{collections::HashMap, rc::Rc};
 
+use std::{env, vec};
+
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
 use crate::LIST_BUILTINS;
@@ -24,8 +26,22 @@ impl Completer for ShellHelper {
         let st = line[..pos].rfind(" ").map_or(0, |i| i + 1);
         let word = &line[st..pos];
 
+        // if we are not the first word, call the `ls` program and then return the 
+        // return the name of the matching file
         if !line[..st].trim().is_empty() {
-            return Ok((st, vec![]));
+            let (wd, completion) = match crate::exec_program("ls", "") {
+                Ok((sout, _)) => {
+                    let files: Vec<String> = String::from_utf8_lossy(&sout)
+                        .lines()
+                        .filter(|line| *&line.starts_with(word))
+                        .map(|s| format!("{s} "))
+                        .collect();
+
+                    (st, files)
+                }
+                _ => (st, vec![]),
+            };
+            return Ok((wd, completion));
         }
 
         let mut completions: Vec<String> = self
@@ -37,8 +53,8 @@ impl Completer for ShellHelper {
             .map(|name| format!("{name} "))
             .collect();
 
-        // *NOTE: Sorting here helps with deduplication but also 
-        // * with matching the longest common prefix 
+        // *NOTE: Sorting here helps with deduplication but also
+        // * with matching the longest common prefix
         completions.sort();
         completions.dedup();
 

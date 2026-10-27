@@ -13,7 +13,11 @@ use std::{
 mod completion;
 
 use is_executable::is_executable;
-use rustyline::{CompletionType, Editor, config::{BellStyle, Configurer}, history::DefaultHistory};
+use rustyline::{
+    CompletionType, Editor,
+    config::{BellStyle, Configurer},
+    history::DefaultHistory,
+};
 
 use crate::completion::ShellHelper;
 
@@ -315,11 +319,6 @@ fn load_executables() -> HashMap<String, String> {
                 let Some(other) = entry.path().to_str().map(str::to_owned) else {
                     continue;
                 };
-                // let k = entry.file_name().into_string().unwrap();
-                // let v = entry.path().to_str().unwrap().to_owned();
-                // map.insert(k, v);
-
-                // first path match
                 map.entry(name).or_insert(other);
             }
         }
@@ -342,3 +341,8 @@ fn load_paths() -> Vec<PathBuf> {
     }
     valid_dirs
 }
+
+// similar to ls
+// fn load_files_in_dir(path: &Path) -> Vec<String> {
+
+// }
