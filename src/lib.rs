@@ -323,7 +323,7 @@ fn load_executables() -> HashMap<String, String> {
         let dir = fs::read_dir(path).unwrap();
         for entry in dir.flatten() {
             let k = entry.file_name().into_string().unwrap();
-            let v = entry.path().into_string().unwrap();
+            let v = entry.path().to_str().unwrap().to_owned();
             map.insert(k, v);
         }
     }
