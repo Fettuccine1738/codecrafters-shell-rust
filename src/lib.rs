@@ -5,6 +5,7 @@ use std::{
     env::{self},
     ffi::OsStr,
     fs::{self, OpenOptions},
+    hash::Hash,
     path::{Path, PathBuf},
     process::Command,
     vec,
@@ -44,7 +45,10 @@ pub enum CacheEntry {
 }
 
 pub fn repl() -> anyhow::Result<()> {
-    let paths = load_paths();
+    // maps ls -> /usr/bin/ls
+    let executables = load_executables();
+    let exe_names = executables.keys().cloned().collect();
+
     // This shell is really slow when searching for executables
     // we store previously searched executables here before looking up in the
     // `PATH` env directories.
@@ -53,12 +57,13 @@ pub fn repl() -> anyhow::Result<()> {
     // `ls -a` just needs to hit the cache and no second lookup.
     let mut cache: HashMap<String, CacheEntry> = HashMap::new();
     let mut editor: Editor<ShellHelper, DefaultHistory> = Editor::new()?;
-    editor.set_helper(Some(ShellHelper));
+    editor.set_helper(Some(ShellHelper { exe_names }));
+
     // editor.set_cursor_visibility(true)?;
 
     loop {
         let input = editor.readline("$ ")?;
-        let _ = eval(&input, &paths, &mut cache);
+        let _ = eval(&input, &executables, &mut cache);
     }
 }
 
@@ -76,7 +81,7 @@ enum OutputTarget<'src> {
 
 fn eval(
     input: &str,
-    paths: &[PathBuf],
+    executables: &HashMap<String, String>,
     cache: &mut HashMap<String, CacheEntry>,
 ) -> anyhow::Result<()> {
     let input = input.trim();
@@ -130,40 +135,45 @@ fn eval(
         write_output(err_target, vec![])?;
         write_output(out_target, output)?
     } else if cmd == KEYWORD_TYPE {
-        let output = type_command(args, paths, cache);
+        if args.is_empty() {
+            return Ok(());
+        }
+
+        let output = type_command(args, executables, cache);
         write_output(err_target, vec![])?;
         write_output(out_target, output)?
     } else {
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
         // that can be written to and will be cleared after every repl call.
-        let (out_bytes, err_bytes) = match cache.get(cmd) {
-            Some(CacheEntry::Val(s)) => {
+        let (out_bytes, err_bytes) = match executables.get(cmd) {
+            // Some(CacheEntry::Val(s)) => {
+            Some(s) => {
                 // this program has been called before e.g /usr/bin/ls
                 let prg = Path::new(s).file_name().unwrap();
                 let (stdout, stderr) = exec_program(prg, args)?;
                 (stdout, stderr)
             }
-            Some(CacheEntry::NoVal) => {
+            // Some(CacheEntry::NoVal) => {
+            None => {
                 // again called before but not a valid program e.g /usr/bin/non-exist
                 (format!("{cmd}: not found\n").into_bytes(), vec![])
-            }
-            _ => {
-                // first time call
-                if let Some(pbuf) = find_exec_file(cmd, paths) {
-                    cache.insert(
-                        cmd.to_string(),
-                        CacheEntry::Val(pbuf.to_str().unwrap().to_string()),
-                    );
-                    let prg = pbuf.file_name().unwrap();
-                    let (stdout, stderr) = exec_program(prg, args)?;
-                    (stdout, stderr)
-                } else {
-                    cache.insert(cmd.to_string(), CacheEntry::NoVal);
-                    // we are sending this out as error so it gets printed to eprintln
-                    (vec![], format!("{cmd}: not found\n").into_bytes())
-                }
-            }
+            } // _ => {
+              //     // first time call
+              //     if let Some(pbuf) = find_exec_file(cmd, paths) {
+              //         cache.insert(
+              //             cmd.to_string(),
+              //             CacheEntry::Val(pbuf.to_str().unwrap().to_string()),
+              //         );
+              //         let prg = pbuf.file_name().unwrap();
+              //         let (stdout, stderr) = exec_program(prg, args)?;
+              //         (stdout, stderr)
+              //     } else {
+              //         cache.insert(cmd.to_string(), CacheEntry::NoVal);
+              //         // we are sending this out as error so it gets printed to eprintln
+              //         (vec![], format!("{cmd}: not found\n").into_bytes())
+              //     }
+              // }
         };
 
         write_output(err_target, err_bytes)?;
@@ -256,7 +266,11 @@ fn write_output(target: OutputTarget<'_>, bytes: Vec<u8>) -> anyhow::Result<()> 
     Ok(())
 }
 
-fn type_command(cmd: &str, paths: &[PathBuf], cache: &mut HashMap<String, CacheEntry>) -> Vec<u8> {
+fn type_command(
+    cmd: &str,
+    executables: &HashMap<String, String>,
+    cache: &mut HashMap<String, CacheEntry>,
+) -> Vec<u8> {
     if find_in_cmds(cmd) {
         return format!("{cmd} is a shell builtin\n").into_bytes();
     }
@@ -268,9 +282,8 @@ fn type_command(cmd: &str, paths: &[PathBuf], cache: &mut HashMap<String, CacheE
         };
     }
 
-    match find_exec_file(cmd, paths) {
-        Some(pathbuf) => {
-            let path = pathbuf.to_str().unwrap();
+    match executables.get(cmd) {
+        Some(path) => {
             cache.insert(cmd.to_string(), CacheEntry::Val(path.to_string()));
             format!("{cmd} is {path}\n").into_bytes()
         }
@@ -299,6 +312,22 @@ fn find_in_cmds(to_find: &str) -> bool {
         }
     }
     false
+}
+
+fn load_executables() -> HashMap<String, String> {
+    let paths = load_paths();
+    let mut map: HashMap<String, String> = HashMap::new();
+
+    for path in paths {
+        let dir = fs::read_dir(path).unwrap();
+        for entry in dir.flatten() {
+            let k = entry.file_name().into_string().unwrap();
+            let v = entry.path().into_string().unwrap();
+            map.insert(k, v);
+        }
+    }
+
+    map
 }
 
 // traverses the directories in paths for executable files whose file_name

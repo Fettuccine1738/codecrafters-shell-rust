@@ -1,12 +1,14 @@
-use std::path;
+// use std::{collections::HashMap, rc::Rc};
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
 use crate::LIST_BUILTINS;
 
 // code taken from samples on CodeCrafter's examples page
-#[derive(Debug, Default)]
-pub struct ShellHelper;
+#[derive(Debug)]
+pub struct ShellHelper {
+    pub exe_names: Vec<String>,
+}
 
 impl Completer for ShellHelper {
     type Candidate = String;
@@ -26,9 +28,10 @@ impl Completer for ShellHelper {
             return Ok((st, vec![]));
         }
 
-        let mut completions: Vec<String> = crate::load_paths()
+        let mut completions: Vec<String> = self
+            .exe_names
             .iter()
-            .filter_map(|p| p.file_name()?.to_str())
+            .map(String::as_str)
             .chain(LIST_BUILTINS.iter().copied())
             .filter(|w| w.starts_with(word))
             .map(|name| format!("{name} "))
@@ -37,6 +40,12 @@ impl Completer for ShellHelper {
         completions.sort();
         completions.dedup();
 
+        // rings a bell to indicate there are no valid completions
+        // if completions.is_empty() {
+        // ! this does not work
+        //     print!("\x07");
+        //     // Ok((st, vec!["\x07"]))
+        // }
         Ok((st, completions))
     }
 }
