@@ -148,10 +148,11 @@ fn eval(
         // that can be written to and will be cleared after every repl call.
         let (out_bytes, err_bytes) = match executables.get(cmd) {
             // Some(CacheEntry::Val(s)) => {
-            Some(s) => {
+            Some(_) => {
                 // this program has been called before e.g /usr/bin/ls
-                let prg = Path::new(s).file_name().unwrap();
-                let (stdout, stderr) = exec_program(prg, args)?;
+                // let prg = Path::new(s).file_name().unwrap();
+                // not cmd is the programs alias so this is fine
+                let (stdout, stderr) = exec_program(cmd, args)?;
                 (stdout, stderr)
             }
             // Some(CacheEntry::NoVal) => {
