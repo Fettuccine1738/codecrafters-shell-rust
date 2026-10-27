@@ -58,7 +58,7 @@ pub fn repl() -> anyhow::Result<()> {
     let mut editor: Editor<ShellHelper, DefaultHistory> = Editor::new()?;
     editor.set_helper(Some(ShellHelper { exe_names }));
     editor.set_completion_type(CompletionType::List);
-    editor.set_bell_style(BellStyle::Visible);
+    editor.set_bell_style(BellStyle::Audible);
 
     editor.set_cursor_visibility(true)?;
 
