@@ -321,19 +321,21 @@ fn load_executables() -> HashMap<String, String> {
     for path in load_paths() {
         let dir = fs::read_dir(path).unwrap();
         for entry in dir.flatten() {
-            let Ok(name) = entry.file_name().into_string() else {
-                continue;
-            };
+            if is_executable(entry.path()) {
+                let Ok(name) = entry.file_name().into_string() else {
+                    continue;
+                };
 
-            let Some(other) = entry.path().to_str().map(str::to_owned) else {
-                continue;
-            };
-            // let k = entry.file_name().into_string().unwrap();
-            // let v = entry.path().to_str().unwrap().to_owned();
-            // map.insert(k, v);
+                let Some(other) = entry.path().to_str().map(str::to_owned) else {
+                    continue;
+                };
+                // let k = entry.file_name().into_string().unwrap();
+                // let v = entry.path().to_str().unwrap().to_owned();
+                // map.insert(k, v);
 
-            // first path match
-            map.entry(name).or_insert(other); 
+                // first path match
+                map.entry(name).or_insert(other);
+            }
         }
     }
 
