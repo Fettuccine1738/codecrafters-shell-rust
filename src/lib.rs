@@ -5,8 +5,7 @@ use std::{
     env::{self},
     ffi::OsStr,
     fs::{self, OpenOptions},
-    hash::Hash,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::Command,
     vec,
 };
@@ -59,7 +58,7 @@ pub fn repl() -> anyhow::Result<()> {
     let mut editor: Editor<ShellHelper, DefaultHistory> = Editor::new()?;
     editor.set_helper(Some(ShellHelper { exe_names }));
 
-    // editor.set_cursor_visibility(true)?;
+    editor.set_cursor_visibility(true)?;
 
     loop {
         let input = editor.readline("$ ")?;
@@ -159,22 +158,7 @@ fn eval(
             None => {
                 // again called before but not a valid program e.g /usr/bin/non-exist
                 (format!("{cmd}: not found\n").into_bytes(), vec![])
-            } // _ => {
-              //     // first time call
-              //     if let Some(pbuf) = find_exec_file(cmd, paths) {
-              //         cache.insert(
-              //             cmd.to_string(),
-              //             CacheEntry::Val(pbuf.to_str().unwrap().to_string()),
-              //         );
-              //         let prg = pbuf.file_name().unwrap();
-              //         let (stdout, stderr) = exec_program(prg, args)?;
-              //         (stdout, stderr)
-              //     } else {
-              //         cache.insert(cmd.to_string(), CacheEntry::NoVal);
-              //         // we are sending this out as error so it gets printed to eprintln
-              //         (vec![], format!("{cmd}: not found\n").into_bytes())
-              //     }
-              // }
+            }
         };
 
         write_output(err_target, err_bytes)?;

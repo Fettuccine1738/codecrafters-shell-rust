@@ -41,11 +41,11 @@ impl Completer for ShellHelper {
         completions.dedup();
 
         // rings a bell to indicate there are no valid completions
-        // if completions.is_empty() {
-        // ! this does not work
-        //     print!("\x07");
-        //     // Ok((st, vec!["\x07"]))
-        // }
+        if completions.len() > 1 {
+            // ! this does not work
+            print!("\x07");
+            // Ok((st, vec!["\x07"]))
+        }
         Ok((st, completions))
     }
 }
