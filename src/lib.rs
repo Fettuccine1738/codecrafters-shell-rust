@@ -316,33 +316,28 @@ fn find_in_cmds(to_find: &str) -> bool {
 }
 
 fn load_executables() -> HashMap<String, String> {
-    let paths = load_paths();
     let mut map: HashMap<String, String> = HashMap::new();
 
-    for path in paths {
+    for path in load_paths() {
         let dir = fs::read_dir(path).unwrap();
         for entry in dir.flatten() {
-            let k = entry.file_name().into_string().unwrap();
-            let v = entry.path().to_str().unwrap().to_owned();
-            map.insert(k, v);
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+
+            let Some(other) = entry.path().to_str().map(str::to_owned) else {
+                continue;
+            };
+            // let k = entry.file_name().into_string().unwrap();
+            // let v = entry.path().to_str().unwrap().to_owned();
+            // map.insert(k, v);
+
+            // first path match
+            map.entry(name).or_insert(other); 
         }
     }
 
     map
-}
-
-// traverses the directories in paths for executable files whose file_name
-// matches to_find
-fn find_exec_file(to_find: &str, paths: &[PathBuf]) -> Option<PathBuf> {
-    for path in paths {
-        let dir = fs::read_dir(path).unwrap();
-        for entry in dir.flatten() {
-            if is_executable(entry.path()) && entry.file_name().into_string().unwrap() == to_find {
-                return Some(entry.path());
-            }
-        }
-    }
-    None
 }
 
 // called at the start of our shell program to load the enviroment variable
