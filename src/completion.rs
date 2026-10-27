@@ -37,7 +37,9 @@ impl Completer for ShellHelper {
             .map(|name| format!("{name} "))
             .collect();
 
-        // completions.sort();
+        // *NOTE: Sorting here helps with deduplication but also 
+        // * with matching the longest common prefix 
+        completions.sort();
         completions.dedup();
 
         Ok((st, completions))
