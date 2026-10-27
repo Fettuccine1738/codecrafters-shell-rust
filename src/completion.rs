@@ -1,6 +1,4 @@
-// use std::{collections::HashMap, rc::Rc};
-
-use std::{env, vec};
+use std::vec;
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
@@ -94,6 +92,24 @@ fn complete_nested_path(path: &str) -> Vec<String> {
                     .lines()
                     .filter(|line| *&line.starts_with(file))
                     .map(|s| format!("{s} "))
+                    .collect();
+                files
+            }
+            Err(_) => vec![],
+        };
+    }
+
+    // matches on foo/bar/ -> there is no file to match so we match all files in this dir
+    if !dir.is_empty() {
+        return match crate::exec_program("ls", "") {
+            Ok((stdout, _)) => {
+                let as_str = String::from_utf8_lossy(&stdout);
+                let files: Vec<String> = as_str
+                    .lines()
+                    // we are matching all files  in this subdirectory
+                    // .filter(|line| *&line.starts_with(file))
+                    // reattach dir
+                    .map(|s| format!("{dir}{s} "))
                     .collect();
                 files
             }
