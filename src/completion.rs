@@ -37,7 +37,7 @@ impl Completer for ShellHelper {
             .map(|name| format!("{name} "))
             .collect();
 
-        completions.sort();
+        // completions.sort();
         completions.dedup();
 
         Ok((st, completions))
