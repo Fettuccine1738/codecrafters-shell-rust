@@ -101,7 +101,8 @@ fn complete_nested_path(path: &str) -> Vec<String> {
 
     // matches on foo/bar/ -> there is no file to match so we match all files in this dir
     if !dir.is_empty() {
-        return match crate::exec_program("ls", "") {
+
+        return match crate::exec_program("ls", dir) {
             Ok((stdout, _)) => {
                 let as_str = String::from_utf8_lossy(&stdout);
                 let files: Vec<String> = as_str
