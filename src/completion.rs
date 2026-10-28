@@ -108,7 +108,7 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
                 let s = path.file_name().unwrap().to_str().unwrap();
                 // there is no file to match on, so we send all the files/dirs out as completions
                 let s = if path.is_dir() {
-                    format!("{dir}{s}/")
+                    format!("{dir}{s}/") // append dir
                 } else {
                     format!("{dir}{s} ")
                 };
