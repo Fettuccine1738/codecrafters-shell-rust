@@ -98,34 +98,6 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
         return res;
     }
 
-    // search in the current directory, target might be a file or a
-    // directory
-    if !file.is_empty() {
-        // dir is empty and we need to search in the current directory
-        // hence no args passed to `ls`
-        // TODO: Fix unwrap and handle err variant
-        let cur_dir = env::current_dir().unwrap();
-        let _ = crate::visit_dirs(
-            &cur_dir,
-            &mut res,
-            &|path, res| {
-                let s = path.file_name().unwrap().to_str().unwrap();
-                if s.starts_with(file) {
-                    let s = if path.is_dir() {
-                        format!("{s}/")
-                    } else {
-                        format!("{s} ")
-                    };
-
-                    res.push(s);
-                }
-            },
-            false,
-        );
-
-        // TODO: map names to expecsted output
-    }
-
     // matches on foo/bar/ -> there is no file to match so we match all files in this dir
     if !dir.is_empty() {
         let cur_dir = Path::new(dir);
@@ -148,6 +120,31 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
         );
     }
 
+    // search in the current directory, target might be a file or a
+    // directory, file may or may not be empty
+    // regardless search the cwd
+    // dir is empty and we need to search in the current directory
+    // hence no args passed to `ls`
+    // TODO: Fix unwrap and handle err variant
+    let cur_dir = env::current_dir().unwrap();
+    let _ = crate::visit_dirs(
+        &cur_dir,
+        &mut res,
+        &|path, res| {
+            let s = path.file_name().unwrap().to_str().unwrap();
+            if s.starts_with(file) {
+                let s = if path.is_dir() {
+                    format!("{s}/")
+                } else {
+                    format!("{s} ")
+                };
+
+                res.push(s);
+            }
+        },
+        false,
+    );
+    // TODO: map names to expecsted output
     res
 }
 
