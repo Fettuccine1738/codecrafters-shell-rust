@@ -5,7 +5,7 @@ use std::{
     env::{self},
     ffi::OsStr,
     fs::{self, OpenOptions},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     vec,
 };
@@ -342,7 +342,25 @@ fn load_paths() -> Vec<PathBuf> {
     valid_dirs
 }
 
-// similar to ls
-// fn load_files_in_dir(path: &Path) -> Vec<String> {
+// f is a predicate that tests whether the path matches
+fn visit_dirs(
+    dir: &Path,
+    collection: &mut Vec<String>,
+    f: &dyn Fn(&Path, &mut Vec<String>) -> (),
+    // supplier: &mut dyn FnMut(&Path) -> String,
+    recurse: bool,
+) -> io::Result<()> {
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
 
-// }
+            f(&path, collection);
+
+            if recurse && path.is_dir() {
+                visit_dirs(&path, collection, f, recurse)?;
+            }
+        }
+    }
+    Ok(())
+}

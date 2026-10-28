@@ -1,4 +1,9 @@
-use std::vec;
+use std::{
+    env,
+    fmt::format,
+    path::{Component::CurDir, Path},
+    vec,
+};
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
@@ -27,7 +32,7 @@ impl Completer for ShellHelper {
         // if we are not the first word, call the `ls` program and then return the
         // return the name of the matching file
         if !line[..st].trim().is_empty() {
-            let completion = complete_nested_path(word);
+            let completion = complete_nested_paths(word);
             return Ok((st, completion));
         }
 
@@ -57,6 +62,95 @@ impl Highlighter for ShellHelper {}
 impl Validator for ShellHelper {}
 impl Helper for ShellHelper {}
 
+// fn complete_directory(path: &str) -> Vec<String> {}
+
+fn complete_nested_paths(path: &str) -> Vec<String> {
+    let last = path.rfind("/").map_or(0, |idx| idx + 1);
+
+    // dir will contains the first 'last' bytes, if last == 0
+    // dir is empty
+    let (dir, file) = path.split_at(last);
+    let mut res: Vec<String> = vec![];
+
+    if !dir.is_empty() && !file.is_empty() {
+        let cur_dir = Path::new(dir);
+        let _ = crate::visit_dirs(
+            &cur_dir,
+            &mut res,
+            &|path, res| {
+                let s = path.file_name().unwrap().to_str().unwrap();
+                if s.starts_with(file) {
+                    // here we concatenate to get the full dir back
+                    let s = if path.is_dir() {
+                        format!("{dir}{s}/")
+                    } else {
+                        format!("{dir}{s} ")
+                    };
+
+                    res.push(s);
+                }
+            },
+            false,
+        );
+
+        // if !res.is_empty() {
+        // }
+        return res;
+    }
+
+    // search in the current directory, target might be a file or a
+    // directory
+    if !file.is_empty() {
+        // dir is empty and we need to search in the current directory
+        // hence no args passed to `ls`
+        // TODO: Fix unwrap and handle err variant
+        let cur_dir = env::current_dir().unwrap();
+        let _ = crate::visit_dirs(
+            &cur_dir,
+            &mut res,
+            &|path, res| {
+                let s = path.file_name().unwrap().to_str().unwrap();
+                if s.starts_with(file) {
+                    let s = if path.is_dir() {
+                        format!("{s}/")
+                    } else {
+                        format!("{s} ")
+                    };
+
+                    res.push(s);
+                }
+            },
+            false,
+        );
+
+        // TODO: map names to expecsted output
+    }
+
+    // matches on foo/bar/ -> there is no file to match so we match all files in this dir
+    if !dir.is_empty() {
+        let cur_dir = Path::new(dir);
+        let _ = crate::visit_dirs(
+            &cur_dir,
+            &mut res,
+            &|path, res| {
+                let s = path.file_name().unwrap().to_str().unwrap();
+                if s.starts_with(file) {
+                    let s = if path.is_dir() {
+                        format!("{s}/")
+                    } else {
+                        format!("{s} ")
+                    };
+
+                    res.push(s);
+                }
+            },
+            false,
+        );
+    }
+
+    res
+}
+
 // completion in nested paths
 fn complete_nested_path(path: &str) -> Vec<String> {
     let last = path.rfind("/").map_or(0, |idx| idx + 1);
@@ -66,15 +160,22 @@ fn complete_nested_path(path: &str) -> Vec<String> {
     let (dir, file) = path.split_at(last);
 
     if !dir.is_empty() && !file.is_empty() {
-        return match crate::exec_program("ls", dir) {
+        let dir = format!("{dir} -R"); // we are asking ls to recurse into directories
+        return match crate::exec_program("ls", &dir) {
             Ok((stdout, _)) => {
                 let as_str = String::from_utf8_lossy(&stdout);
                 let files: Vec<String> = as_str
                     .lines()
-                    .filter(|line| *&line.starts_with(file))
+                    .filter(|line| line.starts_with(file))
                     // ls returns the exact file_names; codecrafters expects the path to the full file name
                     // as completion
-                    .map(|s| format!("{dir}{s} "))
+                    .map(|s| {
+                        if s.ends_with("/") {
+                            format!("{dir}{s}") // no whitespace appended to directory matches  
+                        } else {
+                            format!("{dir}{s} ")
+                        }
+                    })
                     .collect();
                 files
             }
@@ -90,7 +191,7 @@ fn complete_nested_path(path: &str) -> Vec<String> {
                 let as_str = String::from_utf8_lossy(&stdout);
                 let files: Vec<String> = as_str
                     .lines()
-                    .filter(|line| *&line.starts_with(file))
+                    .filter(|line| line.starts_with(file))
                     .map(|s| format!("{s} "))
                     .collect();
                 files
@@ -101,7 +202,6 @@ fn complete_nested_path(path: &str) -> Vec<String> {
 
     // matches on foo/bar/ -> there is no file to match so we match all files in this dir
     if !dir.is_empty() {
-
         return match crate::exec_program("ls", dir) {
             Ok((stdout, _)) => {
                 let as_str = String::from_utf8_lossy(&stdout);
