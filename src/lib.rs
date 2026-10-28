@@ -150,7 +150,7 @@ fn eval(
         }
 
         if args[0] == "-p" {
-            let msg = format!("{BUILTIN_COMPLETE}: {}: no completion specification", args[1]);
+            let msg = format!("{BUILTIN_COMPLETE}: {}: no completion specification\n", args[1]);
             write_output(err_target, msg.into_bytes())?
         }
 
