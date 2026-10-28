@@ -21,10 +21,11 @@ use rustyline::{
 
 use crate::completion::ShellHelper;
 
-static KEYWORD_EXIT_SHELL: &str = "exit";
-static KEYWORD_ECHO: &str = "echo";
-static KEYWORD_TYPE: &str = "type";
-static KEYWORD_BUILTIN: &str = "builtin";
+static BUILTIN_EXIT_SHELL: &str = "exit";
+static BUILTIN_ECHO: &str = "echo";
+static BUILTIN_TYPE: &str = "type";
+static BUILTIN_BUILTIN: &str = "builtin";
+static BUILTIN_COMPLETE: &str = "complete";
 
 static OPERATOR_REDIRECT: char = '>';
 // In Unix std-output  is identified by `1`.
@@ -32,11 +33,12 @@ static OPERATOR_REDIRECT: char = '>';
 static _OPERATOR_REDIRECT_FD: &str = "1>";
 static OPERATOR_APPEND_FILE: &str = ">>";
 
-static LIST_BUILTINS: [&str; 4] = [
-    KEYWORD_BUILTIN,
-    KEYWORD_ECHO,
-    KEYWORD_EXIT_SHELL,
-    KEYWORD_TYPE,
+static LIST_BUILTINS: [&str; 5] = [
+    BUILTIN_BUILTIN,
+    BUILTIN_ECHO,
+    BUILTIN_EXIT_SHELL,
+    BUILTIN_TYPE,
+    BUILTIN_COMPLETE,
 ];
 
 // type Cache = Mutex<LazyLock<HashMap<String, String>>>;
@@ -127,9 +129,9 @@ fn eval(
         _ => (target, OutputTarget::Stderr),
     };
 
-    if cmd == KEYWORD_EXIT_SHELL {
+    if cmd == BUILTIN_EXIT_SHELL {
         std::process::exit(0);
-    } else if cmd == KEYWORD_ECHO {
+    } else if cmd == BUILTIN_ECHO {
         let mut output = args.bytes().collect::<Vec<u8>>();
         if !output.is_empty() && output[output.len() - 1] != 10 {
             output.push(10u8);
@@ -139,7 +141,7 @@ fn eval(
         // nothing to it.
         write_output(err_target, vec![])?;
         write_output(out_target, output)?
-    } else if cmd == KEYWORD_TYPE {
+    } else if cmd == BUILTIN_TYPE {
         if args.is_empty() {
             return Ok(());
         }
