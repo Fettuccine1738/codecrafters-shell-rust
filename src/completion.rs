@@ -32,7 +32,8 @@ impl Completer for ShellHelper {
         // if we are not the first word, call the `ls` program and then return the
         // return the name of the matching file
         if !line[..st].trim().is_empty() {
-            let completion = complete_nested_paths(word);
+            let mut completion = complete_nested_paths(word);
+            completion.sort();
             return Ok((st, completion));
         }
 
