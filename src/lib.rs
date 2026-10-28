@@ -1,13 +1,7 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::{
-    collections::HashMap,
-    env::{self},
-    ffi::OsStr,
-    fs::{self, OpenOptions},
-    path::{Path, PathBuf},
-    process::Command,
-    vec,
+    collections::HashMap, env::{self}, ffi::OsStr, fmt::format, fs::{self, OpenOptions}, path::{Path, PathBuf}, process::Command, vec,
 };
 
 mod completion;
@@ -149,6 +143,17 @@ fn eval(
         let output = type_command(args, executables, cache);
         write_output(err_target, vec![])?;
         write_output(out_target, output)?
+    } else if cmd == BUILTIN_COMPLETE {
+        let args: Vec<&str> = args.split_whitespace().collect();
+        if args.len() < 2 {
+            todo!()
+        }
+
+        if args[0] == "-p" {
+            let msg = format!("{BUILTIN_COMPLETE}: {}: no completion specification", args[1]);
+            write_output(err_target, msg.into_bytes())?
+        }
+
     } else {
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
