@@ -106,18 +106,18 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
             &mut res,
             &|path, res| {
                 let s = path.file_name().unwrap().to_str().unwrap();
-                if s.starts_with(file) {
-                    let s = if path.is_dir() {
-                        format!("{s}/")
-                    } else {
-                        format!("{s} ")
-                    };
+                // there is no file to match on, so we send all the files/dirs out as completions
+                let s = if path.is_dir() {
+                    format!("{s}/")
+                } else {
+                    format!("{s} ")
+                };
 
-                    res.push(s);
-                }
+                res.push(s);
             },
             false,
         );
+        return res;
     }
 
     // search in the current directory, target might be a file or a
