@@ -38,23 +38,14 @@ static LIST_BUILTINS: [&str; 5] = [
 // type Cache = Mutex<LazyLock<HashMap<String, String>>>;
 
 // static EXECUTABLES_CACHE: Cache = Mutex::new(LazyLock::new(|| HashMap::new()));
-pub enum CacheEntry {
-    Val(String),
-    NoVal,
-}
 
 pub fn repl() -> anyhow::Result<()> {
     // maps ls -> /usr/bin/ls
     let executables = load_executables();
     let exe_names = executables.keys().cloned().collect();
 
-    // This shell is really slow when searching for executables
-    // we store previously searched executables here before looking up in the
-    // `PATH` env directories.
-    // Usage: `ls -a` will have called the find_exec_file(ls) and will return
-    // /usr/bin/ls
-    // `ls -a` just needs to hit the cache and no second lookup.
-    let mut cache: HashMap<String, CacheEntry> = HashMap::new();
+    // cache to store completions registered with the `BUILTIN_COMPLETE`
+    let mut completion_cache: HashMap<String, String> = HashMap::new();
     let mut editor: Editor<ShellHelper, DefaultHistory> = Editor::new()?;
     editor.set_helper(Some(ShellHelper { exe_names }));
     editor.set_completion_type(CompletionType::List);
@@ -64,7 +55,7 @@ pub fn repl() -> anyhow::Result<()> {
 
     loop {
         let input = editor.readline("$ ")?;
-        let _ = eval(&input, &executables, &mut cache);
+        let _ = eval(&input, &executables, &mut completion_cache);
     }
 }
 
@@ -83,7 +74,7 @@ enum OutputTarget<'src> {
 fn eval(
     input: &str,
     executables: &HashMap<String, String>,
-    cache: &mut HashMap<String, CacheEntry>,
+    completion_cache: &mut HashMap<String, String>,
 ) -> anyhow::Result<()> {
     let input = input.trim();
     if input.is_empty() {
@@ -140,7 +131,7 @@ fn eval(
             return Ok(());
         }
 
-        let output = type_command(args, executables, cache);
+        let output = type_command(args, executables);
         write_output(err_target, vec![])?;
         write_output(out_target, output)?
     } else if cmd == BUILTIN_COMPLETE {
@@ -149,11 +140,26 @@ fn eval(
             todo!()
         }
 
-        if args[0] == "-p" {
-            let msg = format!("{BUILTIN_COMPLETE}: {}: no completion specification\n", args[1]);
-            write_output(err_target, msg.into_bytes())?
-        }
+        let flag = args[0];
 
+        if flag == "-p" {
+            match completion_cache.get(args[1]) {
+                Some(c) => {
+                    // prints complete -C 'path/to/completer' registered_cmd
+                    let msg = format!("{BUILTIN_COMPLETE}: -C '{c}' {}\n", args[1]);
+                    write_output(out_target, msg.into_bytes())?
+                },
+                None => {
+                    let msg = format!("{BUILTIN_COMPLETE}: {}: no completion specification\n", args[1]);
+                    write_output(err_target, msg.into_bytes())?
+                }
+            }
+        } else if flag == "-C" {
+            let completion = args[1].to_string();
+            let command = args[2].to_string();
+
+            completion_cache.insert(command, completion);
+        }
     } else {
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
@@ -267,26 +273,24 @@ fn write_output(target: OutputTarget<'_>, bytes: Vec<u8>) -> anyhow::Result<()> 
 fn type_command(
     cmd: &str,
     executables: &HashMap<String, String>,
-    cache: &mut HashMap<String, CacheEntry>,
 ) -> Vec<u8> {
     if find_in_cmds(cmd) {
         return format!("{cmd} is a shell builtin\n").into_bytes();
     }
-
-    if let Some(entry) = cache.get(cmd) {
-        return match entry {
-            CacheEntry::Val(path) => format!("{cmd} is {path}\n").into_bytes(),
-            CacheEntry::NoVal => format!("{cmd}: not found\n").into_bytes(),
-        };
-    }
+    // if let Some(entry) = cache.get(cmd) {
+    //     return match entry {
+    //         CacheEntry::Val(path) => format!("{cmd} is {path}\n").into_bytes(),
+    //         CacheEntry::NoVal => format!("{cmd}: not found\n").into_bytes(),
+    //     };
+    // }
 
     match executables.get(cmd) {
         Some(path) => {
-            cache.insert(cmd.to_string(), CacheEntry::Val(path.to_string()));
+            // cache.insert(cmd.to_string(), CacheEntry::Val(path.to_string()));
             format!("{cmd} is {path}\n").into_bytes()
         }
         None => {
-            cache.insert(cmd.to_string(), CacheEntry::NoVal);
+            // cache.insert(cmd.to_string(), CacheEntry::NoVal);
             format!("{cmd}: not found\n").into_bytes()
         }
     }
