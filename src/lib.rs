@@ -146,7 +146,7 @@ fn eval(
             match completion_cache.get(args[1]) {
                 Some(c) => {
                     // prints complete -C 'path/to/completer' registered_cmd
-                    let msg = format!("{BUILTIN_COMPLETE}: -C '{c}' {}\n", args[1]);
+                    let msg = format!("{BUILTIN_COMPLETE} -C '{c}' {}\n", args[1]);
                     write_output(out_target, msg.into_bytes())?
                 },
                 None => {
