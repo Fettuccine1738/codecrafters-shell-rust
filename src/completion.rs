@@ -47,10 +47,13 @@ impl Completer for ShellHelper {
                 // ! Bugbug: what
                 if let Some(script) = self.completion_scripts.borrow().get(before_word) {
                     let (s_out, _) = crate::exec_program(script, "").unwrap();
-                    let mut res = String::from_utf8(s_out).unwrap();
-                    res.push_str(" "); // append space to the output.
-
-                    return Ok((st, vec![res]));
+                    // each line is a completion candidiate.
+                    let completions = String::from_utf8(s_out)
+                        .unwrap()
+                        .lines()
+                        .map(|line| format!("{line} "))
+                        .collect();
+                    return Ok((st, completions));
                 }
             }
             let mut completion = complete_nested_paths(word);
@@ -74,6 +77,14 @@ impl Completer for ShellHelper {
 
         Ok((st, completions))
     }
+}
+
+fn script_output_to_completions(output: &[u8]) -> Vec<String> {
+    String::from_utf8(output.to_vec())
+        .unwrap()
+        .lines()
+        .map(|line| format!("{line} "))
+        .collect();
 }
 
 impl rustyline::hint::Hinter for ShellHelper {
@@ -168,6 +179,24 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
     );
     // TODO: map names to expecsted output
     res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::script_output_to_completions;
+
+    #[test]
+    fn script_output_becomes_one_spaced_completion_per_line() {
+        assert_eq!(
+            script_output_to_completions(b"first\nsecond\n"),
+            vec!["first ", "second "]
+        );
+    }
+
+    #[test]
+    fn empty_script_output_has_no_completions() {
+        assert!(script_output_to_completions(b"").is_empty());
+    }
 }
 
 // // completion in nested paths
