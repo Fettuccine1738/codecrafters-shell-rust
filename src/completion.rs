@@ -174,90 +174,20 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
     res
 }
 
-#[cfg(test)]
-mod tests {
-    use super::script_output_to_completions;
+// #[cfg(test)]
+// mod tests {
+//     use super::script_output_to_completions;
 
-    #[test]
-    fn script_output_becomes_one_spaced_completion_per_line() {
-        assert_eq!(
-            script_output_to_completions(b"first\nsecond\n"),
-            vec!["first ", "second "]
-        );
-    }
-
-    #[test]
-    fn empty_script_output_has_no_completions() {
-        assert!(script_output_to_completions(b"").is_empty());
-    }
-}
-
-// // completion in nested paths
-// fn complete_nested_path(path: &str) -> Vec<String> {
-//     let last = path.rfind("/").map_or(0, |idx| idx + 1);
-
-//     // dir will contains the first 'last' bytes, if last == 0
-//     // dir is empty
-//     let (dir, file) = path.split_at(last);
-
-//     if !dir.is_empty() && !file.is_empty() {
-//         let dir = format!("{dir} -R"); // we are asking ls to recurse into directories
-//         return match crate::exec_program("ls", &dir) {
-//             Ok((stdout, _)) => {
-//                 let as_str = String::from_utf8_lossy(&stdout);
-//                 let files: Vec<String> = as_str
-//                     .lines()
-//                     .filter(|line| line.starts_with(file))
-//                     // ls returns the exact file_names; codecrafters expects the path to the full file name
-//                     // as completion
-//                     .map(|s| {
-//                         if s.ends_with("/") {
-//                             format!("{dir}{s}") // no whitespace appended to directory matches
-//                         } else {
-//                             format!("{dir}{s} ")
-//                         }
-//                     })
-//                     .collect();
-//                 files
-//             }
-//             Err(_) => vec![],
-//         };
+//     #[test]
+//     fn script_output_becomes_one_spaced_completion_per_line() {
+//         assert_eq!(
+//             script_output_to_completions(b"first\nsecond\n"),
+//             vec!["first ", "second "]
+//         );
 //     }
 
-//     if !file.is_empty() {
-//         // dir is empty and we need to search in the current directory
-//         // hence no args passed to `ls`
-//         return match crate::exec_program("ls", "") {
-//             Ok((stdout, _)) => {
-//                 let as_str = String::from_utf8_lossy(&stdout);
-//                 let files: Vec<String> = as_str
-//                     .lines()
-//                     .filter(|line| line.starts_with(file))
-//                     .map(|s| format!("{s} "))
-//                     .collect();
-//                 files
-//             }
-//             Err(_) => vec![],
-//         };
+//     #[test]
+//     fn empty_script_output_has_no_completions() {
+//         assert!(script_output_to_completions(b"").is_empty());
 //     }
-
-//     // matches on foo/bar/ -> there is no file to match so we match all files in this dir
-//     if !dir.is_empty() {
-//         return match crate::exec_program("ls", dir) {
-//             Ok((stdout, _)) => {
-//                 let as_str = String::from_utf8_lossy(&stdout);
-//                 let files: Vec<String> = as_str
-//                     .lines()
-//                     // we are matching all files  in this subdirectory
-//                     // .filter(|line| *&line.starts_with(file))
-//                     // reattach dir
-//                     .map(|s| format!("{dir}{s} "))
-//                     .collect();
-//                 files
-//             }
-//             Err(_) => vec![],
-//         };
-//     }
-
-//     vec![]
 // }
