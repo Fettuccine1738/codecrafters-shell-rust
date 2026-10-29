@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, env, iter::FlatMap, path::Path, rc::Rc, vec};
+use std::{cell::RefCell, collections::HashMap, env, path::Path, rc::Rc, vec};
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
@@ -47,7 +47,9 @@ impl Completer for ShellHelper {
                 // ! Bugbug: what
                 if let Some(script) = self.completion_scripts.borrow().get(before_word) {
                     let (s_out, _) = crate::exec_program(script, "").unwrap();
-                    let res = String::from_utf8(s_out).unwrap();
+                    let mut res = String::from_utf8(s_out).unwrap();
+                    res.push_str(" ");
+
                     return Ok((st, vec![res]));
                 }
             }
@@ -168,72 +170,72 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
     res
 }
 
-// completion in nested paths
-fn complete_nested_path(path: &str) -> Vec<String> {
-    let last = path.rfind("/").map_or(0, |idx| idx + 1);
+// // completion in nested paths
+// fn complete_nested_path(path: &str) -> Vec<String> {
+//     let last = path.rfind("/").map_or(0, |idx| idx + 1);
 
-    // dir will contains the first 'last' bytes, if last == 0
-    // dir is empty
-    let (dir, file) = path.split_at(last);
+//     // dir will contains the first 'last' bytes, if last == 0
+//     // dir is empty
+//     let (dir, file) = path.split_at(last);
 
-    if !dir.is_empty() && !file.is_empty() {
-        let dir = format!("{dir} -R"); // we are asking ls to recurse into directories
-        return match crate::exec_program("ls", &dir) {
-            Ok((stdout, _)) => {
-                let as_str = String::from_utf8_lossy(&stdout);
-                let files: Vec<String> = as_str
-                    .lines()
-                    .filter(|line| line.starts_with(file))
-                    // ls returns the exact file_names; codecrafters expects the path to the full file name
-                    // as completion
-                    .map(|s| {
-                        if s.ends_with("/") {
-                            format!("{dir}{s}") // no whitespace appended to directory matches  
-                        } else {
-                            format!("{dir}{s} ")
-                        }
-                    })
-                    .collect();
-                files
-            }
-            Err(_) => vec![],
-        };
-    }
+//     if !dir.is_empty() && !file.is_empty() {
+//         let dir = format!("{dir} -R"); // we are asking ls to recurse into directories
+//         return match crate::exec_program("ls", &dir) {
+//             Ok((stdout, _)) => {
+//                 let as_str = String::from_utf8_lossy(&stdout);
+//                 let files: Vec<String> = as_str
+//                     .lines()
+//                     .filter(|line| line.starts_with(file))
+//                     // ls returns the exact file_names; codecrafters expects the path to the full file name
+//                     // as completion
+//                     .map(|s| {
+//                         if s.ends_with("/") {
+//                             format!("{dir}{s}") // no whitespace appended to directory matches
+//                         } else {
+//                             format!("{dir}{s} ")
+//                         }
+//                     })
+//                     .collect();
+//                 files
+//             }
+//             Err(_) => vec![],
+//         };
+//     }
 
-    if !file.is_empty() {
-        // dir is empty and we need to search in the current directory
-        // hence no args passed to `ls`
-        return match crate::exec_program("ls", "") {
-            Ok((stdout, _)) => {
-                let as_str = String::from_utf8_lossy(&stdout);
-                let files: Vec<String> = as_str
-                    .lines()
-                    .filter(|line| line.starts_with(file))
-                    .map(|s| format!("{s} "))
-                    .collect();
-                files
-            }
-            Err(_) => vec![],
-        };
-    }
+//     if !file.is_empty() {
+//         // dir is empty and we need to search in the current directory
+//         // hence no args passed to `ls`
+//         return match crate::exec_program("ls", "") {
+//             Ok((stdout, _)) => {
+//                 let as_str = String::from_utf8_lossy(&stdout);
+//                 let files: Vec<String> = as_str
+//                     .lines()
+//                     .filter(|line| line.starts_with(file))
+//                     .map(|s| format!("{s} "))
+//                     .collect();
+//                 files
+//             }
+//             Err(_) => vec![],
+//         };
+//     }
 
-    // matches on foo/bar/ -> there is no file to match so we match all files in this dir
-    if !dir.is_empty() {
-        return match crate::exec_program("ls", dir) {
-            Ok((stdout, _)) => {
-                let as_str = String::from_utf8_lossy(&stdout);
-                let files: Vec<String> = as_str
-                    .lines()
-                    // we are matching all files  in this subdirectory
-                    // .filter(|line| *&line.starts_with(file))
-                    // reattach dir
-                    .map(|s| format!("{dir}{s} "))
-                    .collect();
-                files
-            }
-            Err(_) => vec![],
-        };
-    }
+//     // matches on foo/bar/ -> there is no file to match so we match all files in this dir
+//     if !dir.is_empty() {
+//         return match crate::exec_program("ls", dir) {
+//             Ok((stdout, _)) => {
+//                 let as_str = String::from_utf8_lossy(&stdout);
+//                 let files: Vec<String> = as_str
+//                     .lines()
+//                     // we are matching all files  in this subdirectory
+//                     // .filter(|line| *&line.starts_with(file))
+//                     // reattach dir
+//                     .map(|s| format!("{dir}{s} "))
+//                     .collect();
+//                 files
+//             }
+//             Err(_) => vec![],
+//         };
+//     }
 
-    vec![]
-}
+//     vec![]
+// }
