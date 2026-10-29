@@ -47,7 +47,7 @@ impl Completer for ShellHelper {
                 // ! Bugbug: what
                 if let Some(script) = self.completion_scripts.borrow().get(before_word) {
                     let (s_out, _) = crate::exec_program(script, "").unwrap();
-                    // each line is a completion candidiate.
+                    // each line is a completion candidiate so we split the string into candidates 
                     let completions = String::from_utf8(s_out)
                         .unwrap()
                         .lines()
@@ -79,13 +79,6 @@ impl Completer for ShellHelper {
     }
 }
 
-fn script_output_to_completions(output: &[u8]) -> Vec<String> {
-    String::from_utf8(output.to_vec())
-        .unwrap()
-        .lines()
-        .map(|line| format!("{line} "))
-        .collect();
-}
 
 impl rustyline::hint::Hinter for ShellHelper {
     type Hint = String;
