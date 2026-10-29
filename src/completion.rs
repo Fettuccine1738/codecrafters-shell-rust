@@ -48,7 +48,7 @@ impl Completer for ShellHelper {
                 if let Some(script) = self.completion_scripts.borrow().get(before_word) {
                     let (s_out, _) = crate::exec_program(script, "").unwrap();
                     let mut res = String::from_utf8(s_out).unwrap();
-                    res.push_str(" ");
+                    res.push_str(" "); // append space to the output.
 
                     return Ok((st, vec![res]));
                 }
