@@ -1,9 +1,4 @@
-use std::{
-    env,
-    fmt::format,
-    path::{Component::CurDir, Path},
-    vec,
-};
+use std::{cell::RefCell, collections::HashMap, env, path::Path, rc::Rc, vec};
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
@@ -13,6 +8,7 @@ use crate::LIST_BUILTINS;
 #[derive(Debug)]
 pub struct ShellHelper {
     pub exe_names: Vec<String>,
+    pub completion_scripts: Rc<RefCell<HashMap<String, String>>>,
 }
 
 impl Completer for ShellHelper {
@@ -35,6 +31,13 @@ impl Completer for ShellHelper {
             let mut completion = complete_nested_paths(word);
             completion.sort();
             return Ok((st, completion));
+        }
+
+        // search in completion cache
+        if let Some(script) = self.completion_scripts.borrow().get(word) {
+            let (s_out, _) = crate::exec_program(script, "").unwrap();
+            let res = String::from_utf8(s_out).unwrap();
+            return Ok((st, vec![res]));
         }
 
         let mut completions: Vec<String> = self
@@ -76,7 +79,7 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
     if !dir.is_empty() && !file.is_empty() {
         let cur_dir = Path::new(dir);
         let _ = crate::visit_dirs(
-            &cur_dir,
+            cur_dir,
             &mut res,
             &|path, res| {
                 let s = path.file_name().unwrap().to_str().unwrap();
@@ -103,7 +106,7 @@ fn complete_nested_paths(path: &str) -> Vec<String> {
     if !dir.is_empty() {
         let cur_dir = Path::new(dir);
         let _ = crate::visit_dirs(
-            &cur_dir,
+            cur_dir,
             &mut res,
             &|path, res| {
                 let s = path.file_name().unwrap().to_str().unwrap();

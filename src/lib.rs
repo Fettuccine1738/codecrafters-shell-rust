@@ -1,7 +1,15 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::{
-    collections::HashMap, env::{self}, ffi::OsStr, fmt::format, fs::{self, OpenOptions}, path::{Path, PathBuf}, process::Command, vec,
+    cell::RefCell,
+    collections::HashMap,
+    env::{self},
+    ffi::OsStr,
+    fs::{self, OpenOptions},
+    path::{Path, PathBuf},
+    process::Command,
+    rc::Rc,
+    vec,
 };
 
 mod completion;
@@ -45,9 +53,15 @@ pub fn repl() -> anyhow::Result<()> {
     let exe_names = executables.keys().cloned().collect();
 
     // cache to store completions registered with the `BUILTIN_COMPLETE`
-    let mut completion_cache: HashMap<String, String> = HashMap::new();
+    // Interior mutablity is needed here, so the `ShellHelper` sees the updated 
+    // scripts.
+    let completion_cache: Rc<RefCell<HashMap<String, String>>> =
+        Rc::new(RefCell::new(HashMap::new()));
     let mut editor: Editor<ShellHelper, DefaultHistory> = Editor::new()?;
-    editor.set_helper(Some(ShellHelper { exe_names }));
+    editor.set_helper(Some(ShellHelper {
+        exe_names,
+        completion_scripts: Rc::clone(&completion_cache),
+    }));
     editor.set_completion_type(CompletionType::List);
     editor.set_bell_style(BellStyle::Audible);
 
@@ -55,7 +69,7 @@ pub fn repl() -> anyhow::Result<()> {
 
     loop {
         let input = editor.readline("$ ")?;
-        let _ = eval(&input, &executables, &mut completion_cache);
+        let _ = eval(&input, &executables, &mut completion_cache.borrow_mut());
     }
 }
 
@@ -148,9 +162,12 @@ fn eval(
                     // prints complete -C 'path/to/completer' registered_cmd
                     let msg = format!("{BUILTIN_COMPLETE} -C '{c}' {}\n", args[1]);
                     write_output(out_target, msg.into_bytes())?
-                },
+                }
                 None => {
-                    let msg = format!("{BUILTIN_COMPLETE}: {}: no completion specification\n", args[1]);
+                    let msg = format!(
+                        "{BUILTIN_COMPLETE}: {}: no completion specification\n",
+                        args[1]
+                    );
                     write_output(err_target, msg.into_bytes())?
                 }
             }
@@ -270,10 +287,7 @@ fn write_output(target: OutputTarget<'_>, bytes: Vec<u8>) -> anyhow::Result<()> 
     Ok(())
 }
 
-fn type_command(
-    cmd: &str,
-    executables: &HashMap<String, String>,
-) -> Vec<u8> {
+fn type_command(cmd: &str, executables: &HashMap<String, String>) -> Vec<u8> {
     if find_in_cmds(cmd) {
         return format!("{cmd} is a shell builtin\n").into_bytes();
     }
@@ -357,7 +371,7 @@ fn load_paths() -> Vec<PathBuf> {
 fn visit_dirs(
     dir: &Path,
     collection: &mut Vec<String>,
-    f: &dyn Fn(&Path, &mut Vec<String>) -> (),
+    f: &dyn Fn(&Path, &mut Vec<String>),
     // supplier: &mut dyn FnMut(&Path) -> String,
     recurse: bool,
 ) -> io::Result<()> {
