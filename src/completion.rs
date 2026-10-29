@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, env, path::Path, rc::Rc, vec};
+use std::{cell::RefCell, collections::HashMap, env, iter::FlatMap, path::Path, rc::Rc, vec};
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
@@ -24,20 +24,36 @@ impl Completer for ShellHelper {
         // and sets the `st` index right after it (or at 0 if no space).
         let st = line[..pos].rfind(" ").map_or(0, |i| i + 1);
         let word = &line[st..pos];
+        let before_word = line[..st].trim();
 
-        // if we are not the first word, call the `ls` program and then return the
-        // return the name of the matching file
-        if !line[..st].trim().is_empty() {
+        // if there is text before the word  we found, we look for completion scripts first
+        // then programs next
+        if !before_word.is_empty() {
+            let tokens = line.split_whitespace().next();
+            // we only complete if the word is the first and only word
+            // this way we avoid completing a matching word that is embedded in some line
+            // e.g `$ ls 'word_that_matches_completion'`
+            let is_script = match tokens {
+                Some(s) => {
+                    if s == before_word {
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            };
+            if is_script {
+                // ! Bugbug: what
+                if let Some(script) = self.completion_scripts.borrow().get(before_word) {
+                    let (s_out, _) = crate::exec_program(script, "").unwrap();
+                    let res = String::from_utf8(s_out).unwrap();
+                    return Ok((st, vec![res]));
+                }
+            }
             let mut completion = complete_nested_paths(word);
             completion.sort();
             return Ok((st, completion));
-        }
-
-        // search in completion cache
-        if let Some(script) = self.completion_scripts.borrow().get(word) {
-            let (s_out, _) = crate::exec_program(script, "").unwrap();
-            let res = String::from_utf8(s_out).unwrap();
-            return Ok((st, vec![res]));
         }
 
         let mut completions: Vec<String> = self

@@ -53,7 +53,7 @@ pub fn repl() -> anyhow::Result<()> {
     let exe_names = executables.keys().cloned().collect();
 
     // cache to store completions registered with the `BUILTIN_COMPLETE`
-    // Interior mutablity is needed here, so the `ShellHelper` sees the updated 
+    // Interior mutablity is needed here, so the `ShellHelper` sees the updated
     // scripts.
     let completion_cache: Rc<RefCell<HashMap<String, String>>> =
         Rc::new(RefCell::new(HashMap::new()));
