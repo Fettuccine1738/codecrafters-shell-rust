@@ -1,8 +1,15 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::{
-    cell::RefCell, collections::HashMap, env::{self}, ffi::OsStr, fs::{self, OpenOptions}, 
-    path::{Path, PathBuf}, process::{Child, Command}, rc::Rc, vec,
+    cell::RefCell,
+    collections::HashMap,
+    env::{self},
+    ffi::OsStr,
+    fs::{self, OpenOptions},
+    path::{Path, PathBuf},
+    process::{Child, Command},
+    rc::Rc,
+    vec,
 };
 
 mod completion;
@@ -30,6 +37,8 @@ static _OPERATOR_REDIRECT_FD: &str = "1>";
 static OPERATOR_APPEND_FILE: &str = ">>";
 static OPERATOR_AMPS_JOBS: &str = "&";
 
+static LN_WIDTH_JOB_STATUS: usize = 24;
+
 static LIST_BUILTINS: [&str; 6] = [
     BUILTIN_BUILTIN,
     BUILTIN_ECHO,
@@ -39,6 +48,13 @@ static LIST_BUILTINS: [&str; 6] = [
     BUILTIN_JOBS,
 ];
 
+struct JobInfo {
+    job_id: u32, // starts at 1, increments for each new job;
+    p_id: u32,   // process id
+    cmd_string: String,
+    status: u32,
+}
+
 // type Cache = Mutex<LazyLock<HashMap<String, String>>>;
 
 // static EXECUTABLES_CACHE: Cache = Mutex::new(LazyLock::new(|| HashMap::new()));
@@ -47,7 +63,8 @@ pub fn repl() -> anyhow::Result<()> {
     // maps ls -> /usr/bin/ls
     let executables = load_executables();
     let exe_names = executables.keys().cloned().collect();
-    let mut jobs_counter: u32 = 0;
+    // a stack of job ids and pid.
+    let mut jobs_stack: Vec<JobInfo> = vec![];
 
     // cache to store completions registered with the `BUILTIN_COMPLETE`
     // Interior mutablity is needed here, so the `ShellHelper` sees the updated
@@ -66,7 +83,12 @@ pub fn repl() -> anyhow::Result<()> {
 
     loop {
         let input = editor.readline("$ ")?;
-        let _ = eval(&input, &executables, &mut completion_cache.borrow_mut(), &mut jobs_counter);
+        let _ = eval(
+            &input,
+            &executables,
+            &mut completion_cache.borrow_mut(),
+            &mut jobs_stack,
+        );
     }
 }
 
@@ -86,7 +108,7 @@ fn eval(
     input: &str,
     executables: &HashMap<String, String>,
     completion_cache: &mut HashMap<String, String>,
-    jobs_counter: &mut u32
+    jobs_stack: &mut Vec<JobInfo>,
 ) -> anyhow::Result<()> {
     let input = input.trim();
     if input.is_empty() {
@@ -179,6 +201,27 @@ fn eval(
             let _ = completion_cache.remove(&command);
         }
     } else if cmd == BUILTIN_JOBS {
+        for (idx, job) in jobs_stack.iter().enumerate() {
+            if idx == jobs_stack.len() - 1 {
+                write_output(
+                    out_target,
+                    format!(
+                        "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                        job.job_id, "Running", job.cmd_string
+                    )
+                    .into_bytes(),
+                )?;
+            } else {
+                write_output(
+                    out_target,
+                    format!(
+                        "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                        job.job_id, "Running", job.cmd_string
+                    )
+                    .into_bytes(),
+                )?;
+            }
+        }
     } else {
         let program = cmd;
         // strip off background job operator `&`   if present
@@ -193,12 +236,32 @@ fn eval(
         if run_background {
             let child = exec_program_no_wait(program, stripped_args)?;
             let ch_pid = child.id();
-            *jobs_counter += 1;
-            write_output(
-                out_target,
-                format!("[{}] {ch_pid}\n", *jobs_counter).into_bytes(),
-            )?;
-            return Ok(())
+            let jid = if jobs_stack.is_empty() {
+                1
+            } else {
+                // jobs_stack.binary_search(x)
+                jobs_stack.last().unwrap().job_id + 1
+            };
+
+            write_output(out_target, format!("[{}] {ch_pid}\n", jid).into_bytes())?;
+
+            // push onto stack
+            jobs_stack.push(JobInfo {
+                job_id: jid,
+                p_id: ch_pid,
+                cmd_string: { // clean up the arguments
+                    let mut run_command = program.to_string();
+                    // bulid the arsgs cleanly
+                    let cl_args: Vec<&str> = args.split_whitespace().collect();
+                    let new_args = cl_args.join(" ");
+                    run_command.push_str(" ");
+                    run_command.push_str(&new_args);
+                    run_command
+                },
+                status: 0,
+            });
+
+            return Ok(());
         }
 
         // TODO: Instead of making these functions return a vector,
@@ -219,7 +282,6 @@ fn eval(
                 (format!("{program}: not found\n").into_bytes(), vec![])
             }
         };
-        
 
         write_output(err_target, err_bytes)?;
         write_output(out_target, out_bytes)?

@@ -1,7 +1,4 @@
-use std::{
-    cell::RefCell, collections::HashMap, env, path::Path, rc::Rc,
-    vec,
-};
+use std::{cell::RefCell, collections::HashMap, env, path::Path, rc::Rc, vec};
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
@@ -47,7 +44,7 @@ impl Completer for ShellHelper {
                     // word currently being completed
                     args.push(tokens.last().unwrap());
                     // word immediately bofore the word being completed
-                    // * this may be the command itself; 
+                    // * this may be the command itself;
                     // I don't know why the scripts needs this but idc
                     args.push(tokens[tokens.len() - 2]);
                 }
@@ -66,7 +63,7 @@ impl Completer for ShellHelper {
                     .lines()
                     .map(|line| format!("{line} "))
                     .collect();
-                
+
                 return Ok((st, completions));
             }
             let mut completion = complete_nested_paths(word);
