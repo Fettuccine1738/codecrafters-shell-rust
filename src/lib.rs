@@ -185,7 +185,7 @@ fn eval(
         let mut run_background = false;
         let stripped_args = if args.ends_with(OPERATOR_AMPS_JOBS) {
             run_background = true;
-            args.trim_suffix(OPERATOR_AMPS_JOBS)
+            args.strip_suffix(OPERATOR_AMPS_JOBS).unwrap()
         } else {
             args
         };
