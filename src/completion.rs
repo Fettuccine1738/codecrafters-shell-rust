@@ -29,32 +29,52 @@ impl Completer for ShellHelper {
         // if there is text before the word  we found, we look for completion scripts first
         // then programs next
         if !before_word.is_empty() {
-            let tokens = line.split_whitespace().next();
+            let tokens: Vec<&str> = line.split_whitespace().collect();
             // we only complete if the word is the first and only word
             // this way we avoid completing a matching word that is embedded in some line
             // e.g `$ ls 'word_that_matches_completion'`
-            let is_script = match tokens {
-                Some(s) => {
-                    if s == before_word {
-                        true
-                    } else {
-                        false
-                    }
+            // ! WARN: Previously we checked that the registered command was the only token
+            // ! on the line. This way we didn't complete the same word used in another context.
+            // ! cc wants to pass arguments to the completer_script and that requires us to match on only
+            // ! the first token.
+
+            // let is_script = match tokens {
+            //     Some(s) => {
+            //         if s == before_word {
+            //             true
+            //         } else {
+            //             false
+            //         }
+            //     }
+            //     _ => false,
+            // };
+            // ! Bugbug: what
+            let cmd = tokens[0]; // command the script was registered for
+            if let Some(script) = self.completion_scripts.borrow().get(cmd) {
+                // reconstructing args for the
+                let mut args = cmd.to_string();
+                args.push_str(" ");
+                if tokens.len() > 1 {
+                    args.push_str(tokens.get(2).unwrap()); // word currently being completed
+                    args.push_str(" ");
                 }
-                _ => false,
-            };
-            if is_script {
-                // ! Bugbug: what
-                if let Some(script) = self.completion_scripts.borrow().get(before_word) {
-                    let (s_out, _) = crate::exec_program(script, "").unwrap();
-                    // each line is a completion candidiate so we split the string into candidates 
-                    let completions = String::from_utf8(s_out)
-                        .unwrap()
-                        .lines()
-                        .map(|line| format!("{line} "))
-                        .collect();
-                    return Ok((st, completions));
-                }
+                if tokens.len() == 3 { 
+                    args.push_str(tokens[1]); // word immediately bofore the word being completed 
+                } else {
+                    // if there is no immediate word before the word to be completed
+                    // we pass in an empty string.
+                    // * how useful, if args in exec_program splits on whitespace
+                    args.push_str(" ");
+                };
+
+                let (s_out, _) = crate::exec_program(script, &args).unwrap();
+                // each line is a completion candidiate so we split the string into candidates
+                let completions = String::from_utf8(s_out)
+                    .unwrap()
+                    .lines()
+                    .map(|line| format!("{line} "))
+                    .collect();
+                return Ok((st, completions));
             }
             let mut completion = complete_nested_paths(word);
             completion.sort();
@@ -70,7 +90,7 @@ impl Completer for ShellHelper {
             .map(|name| format!("{name} "))
             .collect();
 
-        // *NOTE: Sorting here helps with deduplication but also
+        // * NOTE: Sorting here helps with deduplication but also
         // * with matching the longest common prefix
         completions.sort();
         completions.dedup();
@@ -78,7 +98,6 @@ impl Completer for ShellHelper {
         Ok((st, completions))
     }
 }
-
 
 impl rustyline::hint::Hinter for ShellHelper {
     type Hint = String;
