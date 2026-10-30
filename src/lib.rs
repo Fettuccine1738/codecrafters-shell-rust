@@ -1,15 +1,8 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::{
-    cell::RefCell,
-    collections::HashMap,
-    env::{self},
-    ffi::OsStr,
-    fs::{self, OpenOptions},
-    path::{Path, PathBuf},
-    process::Command,
-    rc::Rc,
-    vec,
+    cell::RefCell, collections::HashMap, env::{self}, ffi::OsStr, fs::{self, OpenOptions}, 
+    path::{Path, PathBuf}, process::{Child, Command}, rc::Rc, vec,
 };
 
 mod completion;
@@ -35,6 +28,7 @@ static OPERATOR_REDIRECT: char = '>';
 // Usage: `echo hello 1> file.txt`
 static _OPERATOR_REDIRECT_FD: &str = "1>";
 static OPERATOR_APPEND_FILE: &str = ">>";
+static OPERATOR_AMPS_JOBS: &str = "&";
 
 static LIST_BUILTINS: [&str; 6] = [
     BUILTIN_BUILTIN,
@@ -53,6 +47,7 @@ pub fn repl() -> anyhow::Result<()> {
     // maps ls -> /usr/bin/ls
     let executables = load_executables();
     let exe_names = executables.keys().cloned().collect();
+    let mut jobs_counter: u32 = 0;
 
     // cache to store completions registered with the `BUILTIN_COMPLETE`
     // Interior mutablity is needed here, so the `ShellHelper` sees the updated
@@ -71,7 +66,7 @@ pub fn repl() -> anyhow::Result<()> {
 
     loop {
         let input = editor.readline("$ ")?;
-        let _ = eval(&input, &executables, &mut completion_cache.borrow_mut());
+        let _ = eval(&input, &executables, &mut completion_cache.borrow_mut(), &mut jobs_counter);
     }
 }
 
@@ -91,6 +86,7 @@ fn eval(
     input: &str,
     executables: &HashMap<String, String>,
     completion_cache: &mut HashMap<String, String>,
+    jobs_counter: &mut u32
 ) -> anyhow::Result<()> {
     let input = input.trim();
     if input.is_empty() {
@@ -183,26 +179,47 @@ fn eval(
             let _ = completion_cache.remove(&command);
         }
     } else if cmd == BUILTIN_JOBS {
-
     } else {
+        let program = cmd;
+        // strip off background job operator `&`   if present
+        let mut run_background = false;
+        let stripped_args = if args.ends_with(OPERATOR_AMPS_JOBS) {
+            run_background = true;
+            args.trim_suffix(OPERATOR_AMPS_JOBS)
+        } else {
+            args
+        };
+
+        if run_background {
+            let child = exec_program_no_wait(program, stripped_args)?;
+            let ch_pid = child.id();
+            *jobs_counter += 1;
+            write_output(
+                out_target,
+                format!("[{}] {ch_pid}\n", *jobs_counter).into_bytes(),
+            )?;
+            return Ok(())
+        }
+
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
         // that can be written to and will be cleared after every repl call.
-        let (out_bytes, err_bytes) = match executables.get(cmd) {
+        let (out_bytes, err_bytes) = match executables.get(program) {
             // Some(CacheEntry::Val(s)) => {
             Some(_) => {
                 // this program has been called before e.g /usr/bin/ls
                 // let prg = Path::new(s).file_name().unwrap();
                 // not cmd is the programs alias so this is fine
-                let (stdout, stderr) = exec_program(cmd, args)?;
+                let (stdout, stderr) = exec_program(program, stripped_args)?;
                 (stdout, stderr)
             }
             // Some(CacheEntry::NoVal) => {
             None => {
                 // again called before but not a valid program e.g /usr/bin/non-exist
-                (format!("{cmd}: not found\n").into_bytes(), vec![])
+                (format!("{program}: not found\n").into_bytes(), vec![])
             }
         };
+        
 
         write_output(err_target, err_bytes)?;
         write_output(out_target, out_bytes)?
@@ -268,12 +285,14 @@ fn write_output(target: OutputTarget<'_>, bytes: Vec<u8>) -> anyhow::Result<()> 
     match target {
         OutputTarget::Stdout => {
             if !bytes.is_empty() {
-                print!("{}", String::from_utf8_lossy(&bytes));
+                io::stdout().write_all(&bytes)?;
+                io::stdout().flush()?;
             }
         }
         OutputTarget::Stderr => {
             if !bytes.is_empty() {
-                eprint!("{}", String::from_utf8_lossy(&bytes));
+                io::stderr().write_all(&bytes)?;
+                io::stderr().flush()?;
             }
         }
         OutputTarget::File { path, append, .. } => {
@@ -331,6 +350,16 @@ fn exec_program_with_env<T: AsRef<OsStr>>(
         .output()
         .expect("Process should execute successfully");
     Ok((output.stdout, output.stderr))
+}
+
+fn exec_program_no_wait<T: AsRef<OsStr>>(program: T, args: &str) -> anyhow::Result<Child> {
+    let args: Vec<&str> = args.split_whitespace().collect();
+    // spawn a new process, without waiting for completions don't need the child
+    let child: std::process::Child = Command::new(program)
+        .args(args)
+        .spawn()
+        .expect("Process should execute successfully");
+    Ok(child)
 }
 
 fn exec_program<T: AsRef<OsStr>>(program: T, args: &str) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
