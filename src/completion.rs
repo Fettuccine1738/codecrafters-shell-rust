@@ -1,9 +1,14 @@
-use std::{cell::RefCell, collections::HashMap, env, path::Path, rc::Rc, vec};
+use std::{
+    cell::RefCell, collections::HashMap, env, hash::Hash, net::ToSocketAddrs, path::Path, rc::Rc,
+    vec,
+};
 
 use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate::Validator};
 
 use crate::LIST_BUILTINS;
 
+static COMP_LINE: &'static str = "COMP_LINE";
+static COMP_POINT: &'static str = "COMP_POINT";
 // code taken from samples on CodeCrafter's examples page
 #[derive(Debug)]
 pub struct ShellHelper {
@@ -66,8 +71,12 @@ impl Completer for ShellHelper {
                     // * how useful, if args in exec_program splits on whitespace
                     args.push_str(" ");
                 };
+                // completion environment variables
+                let mut env_vars: HashMap<&'static str, String> = HashMap::new();
+                env_vars.insert(COMP_LINE, line.to_string());
+                env_vars.insert(COMP_POINT, pos.to_string());
 
-                let (s_out, _) = crate::exec_program(script, &args).unwrap();
+                let (s_out, _) = crate::exec_program_with_env(script, &args, &env_vars).unwrap();
                 // each line is a completion candidiate so we split the string into candidates
                 let completions = String::from_utf8(s_out)
                     .unwrap()
