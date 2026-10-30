@@ -312,10 +312,10 @@ fn type_command(cmd: &str, executables: &HashMap<String, String>) -> Vec<u8> {
 
 fn exec_program_with_env<T: AsRef<OsStr>>(
     program: T,
-    args: &str,
+    args: Vec<&str>,
     env_vars: &HashMap<&'static str, String>,
 ) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
-    let args: Vec<&str> = args.split_whitespace().collect();
+    // let args: Vec<&str> = args.split_whitespace().collect();
     // spawn a new process that inherits our shell's environment
     // and current working directory
     let output = Command::new(program)

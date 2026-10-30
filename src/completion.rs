@@ -35,48 +35,32 @@ impl Completer for ShellHelper {
         // then programs next
         if !before_word.is_empty() {
             let tokens: Vec<&str> = line.split_whitespace().collect();
-            // we only complete if the word is the first and only word
-            // this way we avoid completing a matching word that is embedded in some line
-            // e.g `$ ls 'word_that_matches_completion'`
             // ! WARN: Previously we checked that the registered command was the only token
             // ! on the line. This way we didn't complete the same word used in another context.
             // ! cc wants to pass arguments to the completer_script and that requires us to match on only
             // ! the first token.
-
-            // let is_script = match tokens {
-            //     Some(s) => {
-            //         if s == before_word {
-            //             true
-            //         } else {
-            //             false
-            //         }
-            //     }
-            //     _ => false,
-            // };
-            // ! Bugbug: what
             let cmd = tokens[0]; // command the script was registered for
             if let Some(script) = self.completion_scripts.borrow().get(cmd) {
                 // reconstructing args for the
-                let mut args = cmd.to_string();
-                args.push_str(" ");
+                let mut args = vec![cmd];
                 if tokens.len() > 1 {
-                    args.push_str(tokens.last().unwrap()); // word currently being completed
-                    args.push_str(" ");
+                    args.push(tokens.last().unwrap()); // word currently being completed
                 }
                 if tokens.len() == 3 {
-                    args.push_str(tokens[1]); // word immediately bofore the word being completed 
+                    args.push(tokens[1]); // word immediately bofore the word being completed 
                 } else {
                     // if there is no immediate word before the word to be completed
                     // we pass in an empty string.
                     // * how useful, if args in exec_program splits on whitespace
-                    args.push_str(" ");
+                    args.push(" ");
                 };
+
                 // completion environment variables
                 let mut env_vars: HashMap<&'static str, String> = HashMap::new();
                 env_vars.insert(COMP_LINE, line.to_string());
                 env_vars.insert(COMP_POINT, pos.to_string());
 
-                let (s_out, _) = crate::exec_program_with_env(script, &args, &env_vars).unwrap();
+                let (s_out, _) = crate::exec_program_with_env(script, args, &env_vars).unwrap();
                 // each line is a completion candidiate so we split the string into candidates
                 let completions = String::from_utf8(s_out)
                     .unwrap()
