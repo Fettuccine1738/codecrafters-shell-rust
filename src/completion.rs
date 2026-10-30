@@ -55,10 +55,10 @@ impl Completer for ShellHelper {
                 let mut args = cmd.to_string();
                 args.push_str(" ");
                 if tokens.len() > 1 {
-                    args.push_str(tokens.get(2).unwrap()); // word currently being completed
+                    args.push_str(tokens.last().unwrap()); // word currently being completed
                     args.push_str(" ");
                 }
-                if tokens.len() == 3 { 
+                if tokens.len() == 3 {
                     args.push_str(tokens[1]); // word immediately bofore the word being completed 
                 } else {
                     // if there is no immediate word before the word to be completed
