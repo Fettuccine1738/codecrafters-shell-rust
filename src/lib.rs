@@ -28,6 +28,7 @@ static BUILTIN_ECHO: &str = "echo";
 static BUILTIN_TYPE: &str = "type";
 static BUILTIN_BUILTIN: &str = "builtin";
 static BUILTIN_COMPLETE: &str = "complete";
+static BUILTIN_JOBS: &str = "jobs";
 
 static OPERATOR_REDIRECT: char = '>';
 // In Unix std-output  is identified by `1`.
@@ -35,12 +36,13 @@ static OPERATOR_REDIRECT: char = '>';
 static _OPERATOR_REDIRECT_FD: &str = "1>";
 static OPERATOR_APPEND_FILE: &str = ">>";
 
-static LIST_BUILTINS: [&str; 5] = [
+static LIST_BUILTINS: [&str; 6] = [
     BUILTIN_BUILTIN,
     BUILTIN_ECHO,
     BUILTIN_EXIT_SHELL,
     BUILTIN_TYPE,
     BUILTIN_COMPLETE,
+    BUILTIN_JOBS,
 ];
 
 // type Cache = Mutex<LazyLock<HashMap<String, String>>>;
@@ -180,6 +182,8 @@ fn eval(
             let command = args[1].to_string();
             let _ = completion_cache.remove(&command);
         }
+    } else if cmd == BUILTIN_JOBS {
+
     } else {
         // TODO: Instead of making these functions return a vector,
         // we could have a shell object that owns an output buffer
