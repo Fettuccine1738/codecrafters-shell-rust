@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell, collections::HashMap, env, hash::Hash, net::ToSocketAddrs, path::Path, rc::Rc,
+    cell::RefCell, collections::HashMap, env, path::Path, rc::Rc,
     vec,
 };
 
@@ -7,8 +7,8 @@ use rustyline::{Helper, completion::Completer, highlight::Highlighter, validate:
 
 use crate::LIST_BUILTINS;
 
-static COMP_LINE: &'static str = "COMP_LINE";
-static COMP_POINT: &'static str = "COMP_POINT";
+static COMP_LINE: &str = "COMP_LINE";
+static COMP_POINT: &str = "COMP_POINT";
 // code taken from samples on CodeCrafter's examples page
 #[derive(Debug)]
 pub struct ShellHelper {
@@ -47,16 +47,10 @@ impl Completer for ShellHelper {
                     // word currently being completed
                     args.push(tokens.last().unwrap());
                     // word immediately bofore the word being completed
+                    // * this may be the command itself; 
+                    // I don't know why the scripts needs this but idc
                     args.push(tokens[tokens.len() - 2]);
                 }
-                // if tokens.len() == 3 {
-                //     args.push(tokens[1]); // word immediately bofore the word being completed
-                // } else {
-                //     // if there is no immediate word before the word to be completed
-                //     // we pass in an empty string.
-                //     // * how useful, if args in exec_program splits on whitespace
-                //     args.push(" ");
-                // };
 
                 // completion environment variables
                 let mut env_vars: HashMap<&'static str, String> = HashMap::new();
@@ -65,11 +59,14 @@ impl Completer for ShellHelper {
 
                 let (s_out, _) = crate::exec_program_with_env(script, args, &env_vars).unwrap();
                 // each line is a completion candidiate so we split the string into candidates
+                // * NOTE:  We don't need to sort here because `rusty-line` handles longest_common_prefix for the
+                // completions.
                 let completions = String::from_utf8(s_out)
                     .unwrap()
                     .lines()
                     .map(|line| format!("{line} "))
                     .collect();
+                
                 return Ok((st, completions));
             }
             let mut completion = complete_nested_paths(word);

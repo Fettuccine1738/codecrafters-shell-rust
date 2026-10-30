@@ -176,6 +176,9 @@ fn eval(
             let command = args[2].to_string();
 
             completion_cache.insert(command, completion);
+        } else if flag == "-r" {
+            let command = args[1].to_string();
+            let _ = completion_cache.remove(&command);
         }
     } else {
         // TODO: Instead of making these functions return a vector,
