@@ -7,7 +7,7 @@ use std::{
     ffi::OsStr,
     fs::{self, OpenOptions},
     path::{Path, PathBuf},
-    process::{Child, Command},
+    process::{Child, Command, ExitStatus},
     rc::Rc,
     vec,
 };
@@ -37,6 +37,9 @@ static _OPERATOR_REDIRECT_FD: &str = "1>";
 static OPERATOR_APPEND_FILE: &str = ">>";
 static OPERATOR_AMPS_JOBS: &str = "&";
 
+static STATUS_JOB_DONE: &str = "Done";
+static STATUS_JOB_RUNNING: &str = "running";
+
 static LN_WIDTH_JOB_STATUS: usize = 24;
 
 static LIST_BUILTINS: [&str; 6] = [
@@ -49,10 +52,15 @@ static LIST_BUILTINS: [&str; 6] = [
 ];
 
 struct JobInfo {
-    job_id: u32, // starts at 1, increments for each new job;
-    p_id: u32,   // process id
+    // starts at 1, increments for each new job;
+    job_id: u32,
+    // process id
+    // p_id: u32, unused, left out for now.
     cmd_string: String,
-    status: u32,
+    // handle to the child process, to check the status codes
+    handle_child: Child,
+    // caches whether this jobs already exited, i.e handl_child.is_some()
+    exited: bool,
 }
 
 // type Cache = Mutex<LazyLock<HashMap<String, String>>>;
@@ -201,22 +209,30 @@ fn eval(
             let _ = completion_cache.remove(&command);
         }
     } else if cmd == BUILTIN_JOBS {
-        for (idx, job) in jobs_stack.iter().enumerate() {
-            if idx == jobs_stack.len() - 1 {
+        let jobs_len = jobs_stack.len();
+        for idx in 0..jobs_len {
+            let job = &mut jobs_stack[idx];
+            let (status, exited) = match job.handle_child.try_wait()? {
+                Some(_) => (STATUS_JOB_DONE, true),
+                None => (STATUS_JOB_RUNNING, false),
+            };
+            job.exited = exited;
+
+            if idx == jobs_len - 1 {
                 write_output(
                     out_target,
                     format!(
                         "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, "Running", job.cmd_string
+                        job.job_id, status, job.cmd_string
                     )
                     .into_bytes(),
                 )?;
-            } else if idx == jobs_stack.len() - 2 {
+            } else if idx == jobs_len - 2 {
                 write_output(
                     out_target,
                     format!(
                         "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, "Running", job.cmd_string
+                        job.job_id, status, job.cmd_string
                     )
                     .into_bytes(),
                 )?;
@@ -225,11 +241,22 @@ fn eval(
                     out_target,
                     format!(
                         "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, "Running", job.cmd_string
+                        job.job_id, status, job.cmd_string
                     )
                     .into_bytes(),
                 )?;
             }
+        }
+
+        // accumulate finished job's index
+        let finished: Vec<usize> = jobs_stack
+            .iter()
+            .enumerate()
+            .filter_map(|(index, job)| job.exited.then_some(index))
+            .collect();
+
+        for index in finished.into_iter().rev() {
+            jobs_stack.remove(index);
         }
     } else {
         let program = cmd;
@@ -257,7 +284,7 @@ fn eval(
             // push onto stack
             jobs_stack.push(JobInfo {
                 job_id: jid,
-                p_id: ch_pid,
+                // p_id: ch_pid,
                 cmd_string: {
                     // clean up the arguments
                     let mut run_command = program.to_string();
@@ -268,7 +295,8 @@ fn eval(
                     run_command.push_str(&new_args);
                     run_command
                 },
-                status: 0,
+                handle_child: child,
+                exited: false,
             });
 
             return Ok(());
@@ -440,6 +468,7 @@ fn exec_program<T: AsRef<OsStr>>(program: T, args: &str) -> anyhow::Result<(Vec<
     // and current working directory
     let output = Command::new(program)
         .args(args)
+        // .status()
         .output()
         .expect("Process should execute successfully");
     Ok((output.stdout, output.stderr))
