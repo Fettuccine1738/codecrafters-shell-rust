@@ -213,55 +213,6 @@ fn eval(
         }
     } else if cmd == BUILTIN_JOBS {
         reap_jobs(jobs_stack, out_target, true)?
-        // let jobs_len = jobs_stack.len();
-        // for idx in 0..jobs_len {
-        //     let job = &mut jobs_stack[idx];
-        //     let (status, exited) = match job.handle_child.try_wait()? {
-        //         Some(_) => (STATUS_JOB_DONE, true),
-        //         None => (STATUS_JOB_RUNNING, false),
-        //     };
-        //     job.exited = exited;
-
-        //     if idx == jobs_len - 1 {
-        //         write_output(
-        //             out_target,
-        //             format!(
-        //                 "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-        //                 job.job_id, status, job.cmd_string
-        //             )
-        //             .into_bytes(),
-        //         )?;
-        //     } else if idx == jobs_len - 2 {
-        //         write_output(
-        //             out_target,
-        //             format!(
-        //                 "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-        //                 job.job_id, status, job.cmd_string
-        //             )
-        //             .into_bytes(),
-        //         )?;
-        //     } else {
-        //         write_output(
-        //             out_target,
-        //             format!(
-        //                 "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-        //                 job.job_id, status, job.cmd_string
-        //             )
-        //             .into_bytes(),
-        //         )?;
-        //     }
-        // }
-
-        // // accumulate finished job's index
-        // let finished: Vec<usize> = jobs_stack
-        //     .iter()
-        //     .enumerate()
-        //     .filter_map(|(index, job)| job.exited.then_some(index))
-        //     .collect();
-
-        // for index in finished.into_iter().rev() {
-        //     jobs_stack.remove(index);
-        // }
     } else {
         let program = cmd;
         // strip off background job operator `&`   if present
@@ -276,10 +227,11 @@ fn eval(
         if run_background {
             let child = exec_program_no_wait(program, stripped_args)?;
             let ch_pid = child.id();
+            // recycles job id
             let jid = if jobs_stack.is_empty() {
                 1
             } else {
-                // jobs_stack.binary_search(x)
+                // jobs_stack.binary_search(x) !useless just want to see rust's imple
                 jobs_stack.last().unwrap().job_id + 1
             };
 
