@@ -90,6 +90,8 @@ pub fn repl() -> anyhow::Result<()> {
     editor.set_cursor_visibility(true)?;
 
     loop {
+        // we default to StdOut as the output target, since we don't this info
+        reap_jobs(&mut jobs_stack, OutputTarget::Stdout)?;
         let input = editor.readline("$ ")?;
         let _ = eval(
             &input,
