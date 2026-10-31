@@ -209,55 +209,57 @@ fn eval(
             let _ = completion_cache.remove(&command);
         }
     } else if cmd == BUILTIN_JOBS {
-        let jobs_len = jobs_stack.len();
-        for idx in 0..jobs_len {
-            let job = &mut jobs_stack[idx];
-            let (status, exited) = match job.handle_child.try_wait()? {
-                Some(_) => (STATUS_JOB_DONE, true),
-                None => (STATUS_JOB_RUNNING, false),
-            };
-            job.exited = exited;
+        reap_jobs(jobs_stack, out_target)?
+        // let jobs_len = jobs_stack.len();
+        // for idx in 0..jobs_len {
+        //     let job = &mut jobs_stack[idx];
+        //     let (status, exited) = match job.handle_child.try_wait()? {
+        //         Some(_) => (STATUS_JOB_DONE, true),
+        //         None => (STATUS_JOB_RUNNING, false),
+        //     };
+        //     job.exited = exited;
 
-            if idx == jobs_len - 1 {
-                write_output(
-                    out_target,
-                    format!(
-                        "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, status, job.cmd_string
-                    )
-                    .into_bytes(),
-                )?;
-            } else if idx == jobs_len - 2 {
-                write_output(
-                    out_target,
-                    format!(
-                        "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, status, job.cmd_string
-                    )
-                    .into_bytes(),
-                )?;
-            } else {
-                write_output(
-                    out_target,
-                    format!(
-                        "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, status, job.cmd_string
-                    )
-                    .into_bytes(),
-                )?;
-            }
-        }
+        //     if idx == jobs_len - 1 {
+        //         write_output(
+        //             out_target,
+        //             format!(
+        //                 "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+        //                 job.job_id, status, job.cmd_string
+        //             )
+        //             .into_bytes(),
+        //         )?;
+        //     } else if idx == jobs_len - 2 {
+        //         write_output(
+        //             out_target,
+        //             format!(
+        //                 "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+        //                 job.job_id, status, job.cmd_string
+        //             )
+        //             .into_bytes(),
+        //         )?;
+        //     } else {
+        //         write_output(
+        //             out_target,
+        //             format!(
+        //                 "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+        //                 job.job_id, status, job.cmd_string
+        //             )
+        //             .into_bytes(),
+        //         )?;
+        //     }
+        // }
 
-        // accumulate finished job's index
-        let finished: Vec<usize> = jobs_stack
-            .iter()
-            .enumerate()
-            .filter_map(|(index, job)| job.exited.then_some(index))
-            .collect();
 
-        for index in finished.into_iter().rev() {
-            jobs_stack.remove(index);
-        }
+        // // accumulate finished job's index
+        // let finished: Vec<usize> = jobs_stack
+        //     .iter()
+        //     .enumerate()
+        //     .filter_map(|(index, job)| job.exited.then_some(index))
+        //     .collect();
+
+        // for index in finished.into_iter().rev() {
+        //     jobs_stack.remove(index);
+        // }
     } else {
         let program = cmd;
         // strip off background job operator `&`   if present
@@ -326,6 +328,63 @@ fn eval(
         write_output(out_target, out_bytes)?
     }
     Ok(())
+}
+
+
+// unlike the code insied the `BUILTIN_JOBS` path, we have to print the finished jobs
+fn reap_jobs(jobs_stack: &mut Vec<JobInfo>, output_target: OutputTarget) -> anyhow::Result<()> {
+    let jobs_len = jobs_stack.len();
+        for idx in 0..jobs_len {
+            let job = &mut jobs_stack[idx];
+            // check if child proc exited (sucess doesn't matter here)
+            let (status, exited) = match job.handle_child.try_wait()? {
+                Some(_) => (STATUS_JOB_DONE, true),
+                None => (STATUS_JOB_RUNNING, false),
+            };
+            job.exited = exited;
+
+            if idx == jobs_len - 1 {
+                write_output(
+                    output_target,
+                    format!(
+                        "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                        job.job_id, status, job.cmd_string
+                    )
+                    .into_bytes(),
+                )?;
+            } else if idx == jobs_len - 2 {
+                write_output(
+                    output_target,
+                    format!(
+                        "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                        job.job_id, status, job.cmd_string
+                    )
+                    .into_bytes(),
+                )?;
+            } else {
+                write_output(
+                    output_target,
+                    format!(
+                        "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                        job.job_id, status, job.cmd_string
+                    )
+                    .into_bytes(),
+                )?;
+            }
+        }
+
+        // accumulate finished job's index
+        let finished: Vec<usize> = jobs_stack
+            .iter()
+            .enumerate()
+            .filter_map(|(index, job)| job.exited.then_some(index))
+            .collect();
+
+        for index in finished.into_iter().rev() {
+            jobs_stack.remove(index);
+        }
+
+        Ok(())
 }
 
 // splits args (a prompt whose command has been stripped away)
