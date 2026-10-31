@@ -7,7 +7,7 @@ use std::{
     ffi::OsStr,
     fs::{self, OpenOptions},
     path::{Path, PathBuf},
-    process::{Child, Command, ExitStatus},
+    process::{Child, Command},
     rc::Rc,
     vec,
 };
@@ -90,6 +90,9 @@ pub fn repl() -> anyhow::Result<()> {
     editor.set_cursor_visibility(true)?;
 
     loop {
+        // we default to StdOut as the output target, since we don't this info
+        reap_jobs(&mut jobs_stack, OutputTarget::Stdout, false)?;
+
         let input = editor.readline("$ ")?;
         let _ = eval(
             &input,
@@ -97,9 +100,6 @@ pub fn repl() -> anyhow::Result<()> {
             &mut completion_cache.borrow_mut(),
             &mut jobs_stack,
         );
-
-        // we default to StdOut as the output target, since we don't this info
-        reap_jobs(&mut jobs_stack, OutputTarget::Stdout)?;
     }
 }
 
@@ -212,7 +212,7 @@ fn eval(
             let _ = completion_cache.remove(&command);
         }
     } else if cmd == BUILTIN_JOBS {
-        reap_jobs(jobs_stack, out_target)?
+        reap_jobs(jobs_stack, out_target, true)?
         // let jobs_len = jobs_stack.len();
         // for idx in 0..jobs_len {
         //     let job = &mut jobs_stack[idx];
@@ -251,7 +251,6 @@ fn eval(
         //         )?;
         //     }
         // }
-
 
         // // accumulate finished job's index
         // let finished: Vec<usize> = jobs_stack
@@ -293,8 +292,8 @@ fn eval(
                 cmd_string: {
                     // clean up the arguments
                     let mut run_command = program.to_string();
-                    // bulid the arsgs cleanly, we use `stripped_args` here because it more 
-                    // convenient to not print the ampersand  
+                    // bulid the arsgs cleanly, we use `stripped_args` here because it more
+                    // convenient to not print the ampersand
                     let cl_args: Vec<&str> = stripped_args.split_whitespace().collect();
                     let new_args = cl_args.join(" ");
                     run_command.push(' ');
@@ -330,28 +329,79 @@ fn eval(
         write_output(err_target, err_bytes)?;
         write_output(out_target, out_bytes)?
     }
+
     Ok(())
 }
 
-
 // unlike the code insied the `BUILTIN_JOBS` path, we have to print the finished jobs
-fn reap_jobs(jobs_stack: &mut Vec<JobInfo>, output_target: OutputTarget) -> anyhow::Result<()> {
+fn reap_jobs(
+    jobs_stack: &mut Vec<JobInfo>,
+    output_target: OutputTarget,
+    by_jobs_builtin: bool,
+) -> anyhow::Result<()> {
     let jobs_len = jobs_stack.len();
-        for idx in 0..jobs_len {
-            let job = &mut jobs_stack[idx];
-            // check if child proc exited (sucess doesn't matter here)
-            let (status, exited) = match job.handle_child.try_wait()? {
-                Some(_) => (STATUS_JOB_DONE, true),
-                None => (STATUS_JOB_RUNNING, false),
-            };
-            job.exited = exited;
+    for idx in 0..jobs_len {
+        let job = &mut jobs_stack[idx];
+        // check if child proc exited (sucess doesn't matter here)
+        let (status, exited) = match job.handle_child.try_wait()? {
+            Some(_) => (STATUS_JOB_DONE, true),
+            None => (STATUS_JOB_RUNNING, false),
+        };
+        job.exited = exited;
 
+        // if this function is not called by the builtin function,
+        // just mark the jobs as done
+        if !by_jobs_builtin {
+            continue;
+        }
+
+        if idx == jobs_len - 1 {
+            write_output(
+                output_target,
+                format!(
+                    "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                    job.job_id, status, job.cmd_string
+                )
+                .into_bytes(),
+            )?;
+        } else if idx == jobs_len - 2 {
+            write_output(
+                output_target,
+                format!(
+                    "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                    job.job_id, status, job.cmd_string
+                )
+                .into_bytes(),
+            )?;
+        } else {
+            write_output(
+                output_target,
+                format!(
+                    "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                    job.job_id, status, job.cmd_string
+                )
+                .into_bytes(),
+            )?;
+        }
+    }
+
+    // accumulate finished job's index
+    let finished: Vec<usize> = jobs_stack
+        .iter()
+        .enumerate()
+        .filter_map(|(index, job)| job.exited.then_some(index))
+        .collect();
+
+    for idx in finished.into_iter().rev() {
+        let job: &JobInfo = &jobs_stack[idx];
+
+        if !by_jobs_builtin {
             if idx == jobs_len - 1 {
                 write_output(
                     output_target,
                     format!(
                         "[{}]+  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, status, job.cmd_string
+                        job.job_id, STATUS_JOB_DONE, job.cmd_string
                     )
                     .into_bytes(),
                 )?;
@@ -360,7 +410,7 @@ fn reap_jobs(jobs_stack: &mut Vec<JobInfo>, output_target: OutputTarget) -> anyh
                     output_target,
                     format!(
                         "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, status, job.cmd_string
+                        job.job_id, STATUS_JOB_DONE, job.cmd_string
                     )
                     .into_bytes(),
                 )?;
@@ -369,25 +419,16 @@ fn reap_jobs(jobs_stack: &mut Vec<JobInfo>, output_target: OutputTarget) -> anyh
                     output_target,
                     format!(
                         "[{}]  {:<LN_WIDTH_JOB_STATUS$} {}\n",
-                        job.job_id, status, job.cmd_string
+                        job.job_id, STATUS_JOB_DONE, job.cmd_string
                     )
                     .into_bytes(),
                 )?;
             }
         }
+        jobs_stack.remove(idx);
+    }
 
-        // accumulate finished job's index
-        let finished: Vec<usize> = jobs_stack
-            .iter()
-            .enumerate()
-            .filter_map(|(index, job)| job.exited.then_some(index))
-            .collect();
-
-        for index in finished.into_iter().rev() {
-            jobs_stack.remove(index);
-        }
-
-        Ok(())
+    Ok(())
 }
 
 // splits args (a prompt whose command has been stripped away)
