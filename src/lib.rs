@@ -288,8 +288,9 @@ fn eval(
                 cmd_string: {
                     // clean up the arguments
                     let mut run_command = program.to_string();
-                    // bulid the arsgs cleanly
-                    let cl_args: Vec<&str> = args.split_whitespace().collect();
+                    // bulid the arsgs cleanly, we use `stripped_args` here because it more 
+                    // convenient to not print the ampersand  
+                    let cl_args: Vec<&str> = stripped_args.split_whitespace().collect();
                     let new_args = cl_args.join(" ");
                     run_command.push(' ');
                     run_command.push_str(&new_args);
