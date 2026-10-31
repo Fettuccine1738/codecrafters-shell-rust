@@ -211,6 +211,15 @@ fn eval(
                     )
                     .into_bytes(),
                 )?;
+            } else if idx == jobs_stack.len() - 2 {
+                write_output(
+                    out_target,
+                    format!(
+                        "[{}]-  {:<LN_WIDTH_JOB_STATUS$} {}\n",
+                        job.job_id, "Running", job.cmd_string
+                    )
+                    .into_bytes(),
+                )?;
             } else {
                 write_output(
                     out_target,
@@ -249,12 +258,13 @@ fn eval(
             jobs_stack.push(JobInfo {
                 job_id: jid,
                 p_id: ch_pid,
-                cmd_string: { // clean up the arguments
+                cmd_string: {
+                    // clean up the arguments
                     let mut run_command = program.to_string();
                     // bulid the arsgs cleanly
                     let cl_args: Vec<&str> = args.split_whitespace().collect();
                     let new_args = cl_args.join(" ");
-                    run_command.push_str(" ");
+                    run_command.push(' ');
                     run_command.push_str(&new_args);
                     run_command
                 },
